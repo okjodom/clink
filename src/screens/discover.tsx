@@ -3,15 +3,16 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, Share, View } from "react-native";
 
+import { BRAND } from "../brand";
 import { channelInfo, currencyInfo, CURRENCIES } from "../lib/channels";
-import { agentLink, npub, parseAgentLink } from "../lib/links";
+import { agentLink, parseAgentLink } from "../lib/links";
 import { formatDecimal } from "../lib/money";
 import { escrowPkOf } from "../protocol/offer";
 import { completedSwaps, type AgentListing } from "../services/discovery";
 import { useDiscovery } from "../store/discovery";
 import { useSession } from "../store/session";
 import { Avatar, Badge, Button, Card, Chip, Empty, Field, IconButton, Notice, Screen, Spinner, Text } from "../ui/components";
-import { CopyField, QR, Sheet } from "../ui/extras";
+import { QR, Sheet } from "../ui/extras";
 import { KeyValue } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
 
@@ -36,7 +37,7 @@ export function DiscoverScreen() {
   );
 
   return (
-    <Screen large title="Agents" onRefresh={() => void load(currency, true)} refreshing={loading && listings.length > 0}>
+    <Screen back large title="Agents" onRefresh={() => void load(currency, true)} refreshing={loading && listings.length > 0}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }} style={{ marginHorizontal: -space.lg }}>
         <View style={{ width: space.lg - space.sm }} />
         {CURRENCIES.map((cur) => (
@@ -64,7 +65,7 @@ export function DiscoverScreen() {
       )}
       {error && <Notice tone="warning">{error}</Notice>}
       {loading && !listings.length ? (
-        <Spinner label="Looking for agents on Nostr…" />
+        <Spinner label="Finding agents near you…" />
       ) : shown.length === 0 ? (
         <Empty
           icon="users"
@@ -211,10 +212,12 @@ export function AgentProfileScreen() {
 export function AgentShareSheet({ pk, name, visible, onClose }: { pk: string; name?: string; visible: boolean; onClose: () => void }) {
   const link = agentLink(pk);
   return (
-    <Sheet visible={visible} onClose={onClose} title={name ? `Swap with ${name}` : "Agent link"}>
+    <Sheet visible={visible} onClose={onClose} title={name ?? "Agent link"}>
+      <Text variant="caption" muted>
+        Scan to add money or cash out with {name ?? "this agent"}. Print it for your shop or share it in your groups.
+      </Text>
       <QR value={link} size={200} />
-      <CopyField value={npub(pk)} short label="npub" />
-      <Button title="Share link" icon="share" onPress={() => void Share.share({ message: `Swap bitcoin with ${name ?? "me"} on Pontspark: ${link}` })} />
+      <Button title="Share link" icon="share" onPress={() => void Share.share({ message: `Add money or cash out with ${name ?? "me"} on ${BRAND.name}: ${link}` })} />
     </Sheet>
   );
 }

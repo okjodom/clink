@@ -2,7 +2,9 @@ import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
 import React, { useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, ScrollView, Share, View } from "react-native";
+
+import { BRAND } from "../brand";
 
 import { useNow, useSwapList } from "../hooks";
 import { currencyInfo, CURRENCIES } from "../lib/channels";
@@ -15,7 +17,7 @@ import { useAgent } from "../store/agent";
 import { useSession } from "../store/session";
 import { useSwaps } from "../store/swaps";
 import { useWallet } from "../store/wallet";
-import { Avatar, Badge, Button, Card, Divider, Empty, Field, Notice, Row, Screen, Section, Segmented, Text, success } from "../ui/components";
+import { Avatar, Badge, Button, Card, Divider, Empty, Field, Notice, Row, Screen, Section, Segmented, Text, Toggle, success } from "../ui/components";
 import { CopyField, Sheet, confirm, toast } from "../ui/extras";
 import { SwapRow } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
@@ -45,12 +47,12 @@ export function ActivityScreen() {
         <Empty
           icon="repeat"
           title={tab === "active" ? "No active swaps" : "No past swaps"}
-          body={mode === "agent" ? "Requests you take appear here." : "Buy or sell bitcoin with an agent near you."}
+          body={mode === "agent" ? "Requests you take appear here." : "Add money or cash out with an agent near you."}
           action={
             mode === "agent" ? undefined : (
               <View style={{ flexDirection: "row", gap: space.sm }}>
-                <Button small title="Buy bitcoin" onPress={() => nav.navigate("NewSwap", { direction: "fiat_to_btc" })} />
-                <Button small kind="secondary" title="Sell bitcoin" onPress={() => nav.navigate("NewSwap", { direction: "btc_to_fiat" })} />
+                <Button small title="Add money" onPress={() => nav.navigate("NewSwap", { direction: "fiat_to_btc" })} />
+                <Button small kind="secondary" title="Cash out" onPress={() => nav.navigate("NewSwap", { direction: "btc_to_fiat" })} />
               </View>
             )
           }
@@ -69,7 +71,7 @@ export function ActivityScreen() {
 export function MeScreen() {
   const nav = useNavigation<any>();
   const c = useColors();
-  const { keys, profile, mode, setMode, backedUp, currency, setCurrency, setProfile } = useSession();
+  const { keys, profile, mode, setMode, backedUp, currency, setCurrency, setProfile, preferSats, togglePreferSats } = useSession();
   const configured = useAgent((s) => s.configured);
   const lnAddress = useWallet((s) => s.lightningAddress);
   const leaveAgent = useConfirmLeaveAgent();
@@ -86,26 +88,37 @@ export function MeScreen() {
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="heading">{profile.name || "Add your name"}</Text>
           <Text variant="caption" muted numberOfLines={1}>
-            {lnAddress ?? `${npub(keys.identity.pk).slice(0, 18)}…`}
+            {lnAddress ?? "No username yet"}
           </Text>
         </View>
         <Feather name="edit-2" size={16} color={c.textMuted} />
       </Card>
 
+      {lnAddress ? (
+        <Button
+          kind="secondary"
+          icon="share"
+          title="Share my username"
+          onPress={() => void Share.share({ message: `Pay me on ${BRAND.name}: ${lnAddress}` })}
+        />
+      ) : (
+        <Button kind="secondary" icon="at-sign" title="Pick a username" onPress={() => setClaimOpen(true)} />
+      )}
+
       <Card tone={mode === "agent" ? "primary" : "accent"}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-          <Feather name={mode === "agent" ? "user" : "briefcase"} size={22} color={mode === "agent" ? c.primary : c.accent} />
+          <Feather name={mode === "agent" ? "user" : "trending-up"} size={22} color={mode === "agent" ? c.primary : c.accent} />
           <View style={{ flex: 1 }}>
-            <Text variant="heading">{mode === "agent" ? "Switch to personal mode" : configured ? "Switch to agent mode" : "Become an agent"}</Text>
+            <Text variant="heading">{mode === "agent" ? "Switch to personal mode" : configured ? "Switch to agent mode" : "Earn as an agent"}</Text>
             <Text variant="caption" muted>
-              {mode === "agent" ? "Use your wallet and swap as a customer." : "Earn by swapping bitcoin for cash with people near you."}
+              {mode === "agent" ? "Use your wallet like everyone else." : "Help people near you add money and cash out, and earn on every swap."}
             </Text>
           </View>
         </View>
         <Button
           small
           kind={mode === "agent" ? "secondary" : "accent"}
-          title={mode === "agent" ? "Personal mode" : configured ? "Agent mode" : "Get started"}
+          title={mode === "agent" ? "Personal mode" : configured ? "Agent mode" : "Start earning"}
           onPress={() => {
             if (mode === "agent") return leaveAgent();
             if (!configured) return nav.navigate("AgentSetup");
@@ -115,49 +128,43 @@ export function MeScreen() {
         />
       </Card>
 
-      <Section title="Wallet">
+      <Section title="Settings">
         <Card style={{ paddingVertical: space.sm, gap: 0 }}>
           <Row
             icon="shield"
-            title="Recovery phrase"
-            subtitle={backedUp ? "Backed up" : "Not backed up yet"}
+            title="Recovery words"
+            subtitle={backedUp ? "Written down" : "Not written down yet"}
             right={backedUp ? <Badge label="Safe" tone="success" /> : <Badge label="Do this" tone="warning" />}
             chevron
             onPress={() => nav.navigate("Backup")}
           />
           <Divider />
-          <Row icon="at-sign" title="Lightning address" subtitle={lnAddress ?? "Claim a reusable address"} chevron onPress={() => (lnAddress ? undefined : setClaimOpen(true))} />
-          <Divider />
           <Row
             icon="dollar-sign"
-            title="Display currency"
+            title="Your currency"
             subtitle={`${currencyInfo(currency).flag} ${currency}`}
             chevron
             onPress={() => setCurrencyOpen(true)}
           />
           <Divider />
-        </Card>
-      </Section>
-
-      <Section title="Nostr">
-        <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-          <Row icon="key" title="Identity" subtitle="Your public key, derived from your recovery phrase" chevron onPress={() => nav.navigate("Identity")} />
+          <Toggle icon="hash" label="Show amounts in sats" subtitle="Bitcoin's smallest unit" value={preferSats} onChange={togglePreferSats} />
           <Divider />
-          <Row icon="radio" title="Relays" subtitle="Where offers, swaps and messages travel" chevron onPress={() => nav.navigate("Relays")} />
+          <Row icon="list" title="Activity" subtitle="Payments and swaps" chevron onPress={() => nav.navigate("Transactions")} />
         </Card>
       </Section>
 
-      <Section title="About">
-        <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-          <Row icon="book-open" title="Pontmore protocol" subtitle="PIP-00, PIP-01, PIP-02 · pontmore/swap@1" chevron onPress={() => void Linking.openURL("https://github.com/pontmore/protocol")} />
-          <Divider />
-          <Row icon="cpu" title="Version" subtitle={`${Constants.expoConfig?.version ?? "dev"} · Breez Spark ${BREEZ_NETWORK}`} />
-        </Card>
-      </Section>
+      <Card tone="alt" onPress={() => nav.navigate("Advanced")} style={{ flexDirection: "row", alignItems: "center" }}>
+        <Feather name="key" size={20} color={c.primary} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="label">Your keys, your money</Text>
+          <Text variant="caption" muted>
+            How {BRAND.name} works without a bank, and the controls that prove it.
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={18} color={c.textMuted} />
+      </Card>
 
-      <Button kind="danger" title="Remove wallet from this phone" icon="log-out" onPress={() => nav.navigate("SignOut")} />
-
-      <Sheet visible={currencyOpen} onClose={() => setCurrencyOpen(false)} title="Display currency">
+      <Sheet visible={currencyOpen} onClose={() => setCurrencyOpen(false)} title="Your currency">
         <ScrollView style={{ maxHeight: 420 }}>
           {CURRENCIES.map((cur) => (
             <Row
@@ -174,7 +181,7 @@ export function MeScreen() {
         </ScrollView>
       </Sheet>
       <Sheet visible={nameOpen} onClose={() => setNameOpen(false)} title="Your name">
-        <Field value={name} onChangeText={setName} placeholder="What agents see in chat" maxLength={48} autoFocus />
+        <Field value={name} onChangeText={setName} placeholder="What people see" maxLength={48} autoFocus />
         <Button
           title="Save"
           onPress={() => {
@@ -187,6 +194,66 @@ export function MeScreen() {
         />
       </Sheet>
       <ClaimAddressSheet visible={claimOpen} onClose={() => setClaimOpen(false)} />
+    </Screen>
+  );
+}
+
+/**
+ * Self-custody, made visible for whoever goes looking: no bank, no account,
+ * keys on this phone, swaps on a public protocol.
+ */
+export function AdvancedScreen() {
+  const nav = useNavigation<any>();
+  const c = useColors();
+  const keys = useSession((s) => s.keys);
+  const backedUp = useSession((s) => s.backedUp);
+  if (!keys) return null;
+  const facts: { icon: React.ComponentProps<typeof Feather>["name"]; title: string; body: string }[] = [
+    { icon: "smartphone", title: "Your money lives on this phone", body: `Not with ${BRAND.name}, not with a bank. Nobody can freeze it or spend it but you.` },
+    { icon: "lock", title: "Swaps can't run off with it", body: "When you cash out, your bitcoin is locked, not sent. It only moves once you have the cash, or it comes back to you." },
+    { icon: "globe", title: "No company in the middle", body: "Agents and customers meet on Nostr, an open network. No account, no sign-up, no server of ours." },
+  ];
+  return (
+    <Screen back title="Your keys, your money">
+      <View style={{ gap: space.lg }}>
+        {facts.map((f) => (
+          <View key={f.title} style={{ flexDirection: "row", gap: space.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: c.primarySoft, alignItems: "center", justifyContent: "center" }}>
+              <Feather name={f.icon} size={18} color={c.primary} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="label">{f.title}</Text>
+              <Text variant="caption" muted>
+                {f.body}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <Section title="Controls">
+        <Card style={{ paddingVertical: space.sm, gap: 0 }}>
+          <Row icon="shield" title="Recovery phrase" subtitle={backedUp ? "12 words, written down" : "Not written down yet"} chevron onPress={() => nav.navigate("Backup")} />
+          <Divider />
+          <Row icon="key" title="Nostr identity" subtitle={`${npub(keys.identity.pk).slice(0, 18)}…`} chevron onPress={() => nav.navigate("Identity")} />
+          <Divider />
+          <Row icon="radio" title="Relays" subtitle="Where offers, swaps and messages travel" chevron onPress={() => nav.navigate("Relays")} />
+          <Divider />
+          <Row icon="map-pin" title="Browse agents" subtitle="Every agent online for your currency" chevron onPress={() => nav.navigate("Agents")} />
+        </Card>
+      </Section>
+
+      <Section title="Under the hood">
+        <Card style={{ paddingVertical: space.sm, gap: 0 }}>
+          <Row icon="book-open" title="Pontmore protocol" subtitle="PIP-00, PIP-01, PIP-02 · pontmore/swap@1" chevron onPress={() => void Linking.openURL("https://github.com/pontmore/protocol")} />
+          <Divider />
+          <Row icon="zap" title="Wallet" subtitle={`Breez Spark · ${BREEZ_NETWORK} · Lightning, Spark and on-chain`} />
+          <Divider />
+          <Row icon="cpu" title="Version" subtitle={Constants.expoConfig?.version ?? "dev"} />
+        </Card>
+      </Section>
+
+      <Button kind="danger" title="Remove wallet from this phone" icon="log-out" onPress={() => nav.navigate("SignOut")} />
     </Screen>
   );
 }

@@ -13,8 +13,8 @@ import { AgentSetupScreen, DeskScreen } from "../screens/agent";
 import { BackupScreen } from "../screens/backup";
 import { AgentProfileScreen, DiscoverScreen } from "../screens/discover";
 import { HomeScreen, TransactionsScreen } from "../screens/home";
-import { ActivityScreen, IdentityScreen, MeScreen, RelaysScreen, SignOutScreen } from "../screens/me";
-import { RestoreScreen, WelcomeScreen } from "../screens/onboarding";
+import { ActivityScreen, AdvancedScreen, IdentityScreen, MeScreen, RelaysScreen, SignOutScreen } from "../screens/me";
+import { PickNameScreen, RestoreScreen, WelcomeScreen } from "../screens/onboarding";
 import { ReceiveScreen } from "../screens/receive";
 import { ScanScreen, SendScreen } from "../screens/send";
 import { ChatScreen, SwapDetailScreen } from "../screens/swapDetail";
@@ -59,9 +59,7 @@ function Tabs() {
         </>
       ) : (
         <>
-          <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: "Wallet", tabBarIcon: icon("credit-card") }} />
-          <Tab.Screen name="Agents" component={DiscoverScreen} options={{ tabBarIcon: icon("map-pin") }} />
-          <Tab.Screen name="Swaps" component={ActivityScreen} options={{ tabBarIcon: icon("repeat"), ...badge }} />
+          <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: "Wallet", tabBarIcon: icon("credit-card"), ...badge }} />
           <Tab.Screen name="Me" component={MeScreen} options={{ tabBarIcon: icon("user") }} />
         </>
       )}
@@ -81,19 +79,22 @@ const linking: LinkingOptions<ReactNavigation.RootParamList> = {
 
 export function RootNavigator() {
   const phase = useSession((s) => s.phase);
+  const needsName = useSession((s) => s.needsName);
   const c = useColors();
   const dark = useIsDark();
   const base = dark ? DarkTheme : DefaultTheme;
   const theme = { ...base, colors: { ...base.colors, background: c.bg, card: c.bg, text: c.text, border: c.border, primary: c.primary } };
 
   return (
-    <NavigationContainer theme={theme} linking={phase === "ready" ? linking : undefined}>
+    <NavigationContainer theme={theme} linking={phase === "ready" && !needsName ? linking : undefined}>
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
         {phase !== "ready" ? (
           <>
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Restore" component={RestoreScreen} />
           </>
+        ) : needsName ? (
+          <Stack.Screen name="PickName" component={PickNameScreen} />
         ) : (
           <>
             <Stack.Screen name="Main" component={Tabs} />
@@ -106,8 +107,10 @@ export function RootNavigator() {
             <Stack.Screen name="ReviewSwap" component={ReviewSwapScreen} />
             <Stack.Screen name="SwapDetail" component={SwapDetailScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="Agents" component={DiscoverScreen} />
             <Stack.Screen name="AgentProfile" component={AgentProfileScreen} />
             <Stack.Screen name="AgentSetup" component={AgentSetupScreen} />
+            <Stack.Screen name="Advanced" component={AdvancedScreen} />
             <Stack.Screen name="Identity" component={IdentityScreen} />
             <Stack.Screen name="Relays" component={RelaysScreen} />
             <Stack.Screen name="SignOut" component={SignOutScreen} />

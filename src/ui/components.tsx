@@ -627,7 +627,8 @@ export function Logo({ size = 40 }: { size?: number }) {
 const AVATAR_COLORS = ["#2f9e44", "#f08c00", "#2b6cb0", "#9c4dcc", "#d64545", "#0f8a8a", "#b96b00", "#3d5a80"];
 
 export function Avatar({ pk, name, size = 44 }: { pk: string; name?: string; size?: number }) {
-  const color = AVATAR_COLORS[parseInt(pk.slice(0, 6), 16) % AVATAR_COLORS.length];
+  const seed = /^[0-9a-f]{6}/i.test(pk) ? parseInt(pk.slice(0, 6), 16) : [...pk].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const color = AVATAR_COLORS[seed % AVATAR_COLORS.length];
   const initials = (name || pk.slice(0, 2))
     .split(/\s+/)
     .map((w) => w[0])

@@ -6,9 +6,10 @@
  */
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, Modal, Pressable, View } from "react-native";
+import { AccessibilityInfo, Animated, Easing, Modal, Pressable, Share, View } from "react-native";
 import { create } from "zustand";
 
+import { BRAND } from "../brand";
 import { Text, success } from "./components";
 import { useColors } from "./theme";
 
@@ -156,6 +157,10 @@ export interface Moment {
   fiatCode: string;
   amountLabel: string;
   caption: string;
+  /** Small caps line above the animation. */
+  label?: string;
+  /** Opt-in brag: a Share button with this text. */
+  share?: string;
 }
 
 const useMoment = create<{ current: Moment | null }>(() => ({ current: null }));
@@ -173,7 +178,7 @@ export function CelebrationHost() {
     if (!current) return;
     fade.setValue(0);
     Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-    const t = setTimeout(() => close(), 2800);
+    const t = setTimeout(() => close(), current.share ? 5000 : 2800);
     return () => clearTimeout(t);
   }, [current]);
   const close = () => Animated.timing(fade, { toValue: 0, duration: 260, useNativeDriver: true }).start(() => useMoment.setState({ current: null }));
@@ -183,12 +188,23 @@ export function CelebrationHost() {
       <Animated.View style={{ flex: 1, opacity: fade, backgroundColor: c.primary }}>
         <Pressable onPress={close} style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 12 }} accessibilityRole="button" accessibilityLabel="Close">
           <Text variant="label" color="#ffffff" style={{ opacity: 0.85, letterSpacing: 1 }}>
-            SWAP COMPLETE
+            {current.label ?? "SWAP COMPLETE"}
           </Text>
           <SwapCelebration play onBrand fiatCode={current.fiatCode} amountLabel={current.amountLabel} caption={current.caption} />
         </Pressable>
+        {current.share ? (
+          <Pressable
+            onPress={() => void Share.share({ message: current.share! })}
+            style={{ alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.18)", marginBottom: 16 }}
+          >
+            <Feather name="share" size={16} color="#ffffff" />
+            <Text variant="label" color="#ffffff">
+              Tell a friend
+            </Text>
+          </Pressable>
+        ) : null}
         <Text variant="caption" color="#ffffff" center style={{ opacity: 0.7, paddingBottom: 48 }}>
-          Pontspark
+          {BRAND.name}
         </Text>
       </Animated.View>
     </Modal>

@@ -7,7 +7,7 @@ import type { SwapRecord } from "../store/swaps";
 import { fiatSender, type SwapState } from "../protocol/swap";
 import type { Tone } from "../ui/components";
 
-export const STEPS = ["Requested", "Accepted", "Bitcoin locked", "Payment sent", "Payment confirmed", "Complete"];
+export const STEPS = ["Requested", "Accepted", "Secured", "Payment sent", "Payment confirmed", "Complete"];
 
 const STEP_OF: Record<string, number> = {
   proposed: 0,
@@ -58,8 +58,8 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
       ? `Sell ${sats} for ${fiat}`
       : `Buy ${sats} for ${fiat}`
     : buying
-      ? `Buy bitcoin with ${fiat}`
-      : `Sell bitcoin for ${fiat}`;
+      ? `Add ${fiat}`
+      : `Cash out ${fiat}`;
 
   const v = (headline: string, detail: string, tone: Tone, myTurn = false, action: MyAction = null): SwapView => ({
     title,

@@ -1,35 +1,39 @@
+import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
-import { Share, View } from "react-native";
+import { Pressable, Share, View } from "react-native";
 
-import { useFiatOf } from "../hooks";
-import { formatSats } from "../lib/money";
+import { BRAND } from "../brand";
+import { useMoney } from "../hooks";
 import * as wallet from "../services/wallet";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
-import { Button, Card, Field, Notice, Screen, Segmented, Spinner, Text, success } from "../ui/components";
-import { CopyField, NumPad, QR, Sheet, toast, toastError } from "../ui/extras";
-import { space } from "../ui/theme";
+import { AmountDisplay, AmountPad, useAmountInput } from "../ui/amount";
+import { Button, Card, Field, Screen, Spinner, Text, success } from "../ui/components";
+import { CopyField, QR, Sheet, toastError } from "../ui/extras";
+import { space, useColors } from "../ui/theme";
 
-type Tab = "lightning" | "onchain";
-
+/**
+ * One code to get paid. With a username that's a reusable code anyone can pay
+ * any time; asking for an amount swaps in a one-off request.
+ */
 export function ReceiveScreen() {
   const nav = useNavigation<any>();
-  const backedUp = useSession((s) => s.backedUp);
-  const lnAddress = useWallet((s) => s.lightningAddress);
-  const [tab, setTab] = useState<Tab>("lightning");
-  const [amount, setAmount] = useState("0");
+  const c = useColors();
+  const { lightningAddress: address, lnurl } = useWallet();
+  const money = useMoney();
+  const input = useAmountInput();
+  const [requested, setRequested] = useState(0);
   const [invoice, setInvoice] = useState<string | null>(null);
-  const [address, setAddress] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [amountOpen, setAmountOpen] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
-  const fiatOf = useFiatOf();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const makeInvoice = async (sats: number) => {
     setBusy(true);
     try {
-      setInvoice(await wallet.receiveInvoice(sats > 0 ? BigInt(sats) : undefined, "Pontspark"));
+      setInvoice(await wallet.receiveInvoice(sats > 0 ? BigInt(sats) : undefined, BRAND.name));
     } catch (e) {
       toastError(e);
     } finally {
@@ -37,120 +41,144 @@ export function ReceiveScreen() {
     }
   };
 
+  // Without a username, fall back to an open-amount request.
   useEffect(() => {
-    if (tab === "lightning" && !invoice) void makeInvoice(0);
-    if (tab === "onchain" && !address) {
-      wallet.bitcoinAddress().then(setAddress).catch(toastError);
-    }
+    if (!lnurl && !invoice) void makeInvoice(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [lnurl]);
 
-  // Close automatically once the invoice is paid.
+  // Close once money lands; the app-wide moment shows what arrived.
   useEffect(() => {
-    if (!invoice) return;
     const startedAt = Math.floor(Date.now() / 1000);
     return wallet.onWalletEvent((e) => {
       if (e.type === "payment" && e.payment.direction === "in" && e.payment.status === "complete" && e.payment.timestamp >= startedAt - 5) {
-        success();
-        toast(`Received ${formatSats(e.payment.amountSats)}`, "success");
         nav.goBack();
       }
     });
-  }, [invoice, nav]);
+  }, [nav]);
 
-  const value = tab === "lightning" ? invoice : address;
-  const sats = Number(amount);
+  const useInvoice = requested > 0 || !lnurl;
+  const code = useInvoice ? invoice : lnurl;
+  const qrValue = code ? `lightning:${code}`.toUpperCase() : null;
+  const asked = requested > 0 ? money.primary(requested) : null;
+  const shareText = useInvoice
+    ? `${asked ? `Pay me ${asked}` : "Pay me"} with ${BRAND.name}: ${invoice ?? ""}`
+    : `Pay me on ${BRAND.name}: ${address}`;
 
   return (
     <Screen back title="Receive">
-      {!backedUp && (
-        <Notice tone="warning" title="Back up before you receive" action={<Button small kind="secondary" title="Back up now" onPress={() => nav.navigate("Backup")} />}>
-          If you lose this phone without your recovery phrase, you lose this money.
-        </Notice>
-      )}
-      <Segmented
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: "lightning", label: "Lightning" },
-          { value: "onchain", label: "On-chain" },
-        ]}
-      />
       <Card style={{ alignItems: "center", gap: space.lg }}>
-        {value && !busy ? <QR value={tab === "lightning" ? value.toUpperCase() : `bitcoin:${value}`} /> : <Spinner />}
-        {tab === "lightning" && (
-          <Text variant="heading" center>
-            {sats > 0 ? formatSats(sats) : "Any amount"}
-            {sats > 0 && fiatOf(sats) ? `  ·  ${fiatOf(sats)}` : ""}
-          </Text>
-        )}
-        {tab === "onchain" && (
-          <Text variant="caption" muted center>
-            On-chain deposits take a few confirmations and carry a network fee.
-          </Text>
-        )}
+        {qrValue && !busy ? <QR value={qrValue} /> : <Spinner />}
+        <View style={{ alignItems: "center", gap: 2 }}>
+          {asked ? (
+            <>
+              <Text variant="title">{asked}</Text>
+              <Text variant="caption" muted>
+                {money.secondary(requested) ?? ""}
+              </Text>
+            </>
+          ) : address ? (
+            <>
+              <Text variant="heading" center selectable>
+                {address}
+              </Text>
+              <Text variant="caption" muted center>
+                Anyone can pay you here, any time
+              </Text>
+            </>
+          ) : (
+            <Text variant="heading">Any amount</Text>
+          )}
+        </View>
       </Card>
-      {value && <CopyField value={value} short label={tab === "lightning" ? "Invoice" : "Bitcoin address"} />}
+
       <View style={{ flexDirection: "row", gap: space.sm }}>
-        {tab === "lightning" && (
-          <Button style={{ flex: 1 }} kind="secondary" icon="edit-3" title="Amount" onPress={() => setAmountOpen(true)} />
-        )}
         <Button
           style={{ flex: 1 }}
           kind="secondary"
-          icon="share"
-          title="Share"
-          disabled={!value}
-          onPress={() => void Share.share({ message: value ?? "" })}
+          icon={requested ? "x" : "edit-3"}
+          title={requested ? "Clear amount" : "Ask for amount"}
+          onPress={() => {
+            if (requested) {
+              setRequested(0);
+              setInvoice(null);
+              if (!lnurl) void makeInvoice(0);
+            } else setAmountOpen(true);
+          }}
         />
+        <Button style={{ flex: 1 }} icon="share" title="Share" disabled={!code} onPress={() => void Share.share({ message: shareText })} />
       </View>
 
-      {tab === "lightning" && (
+      {useInvoice && invoice && <CopyField value={invoice} short label="Payment request" />}
+      {!useInvoice && address && <CopyField value={address} label="Your username" />}
+
+      {!address && (
         <Card tone="alt">
-          <Text variant="label">Lightning address</Text>
-          {lnAddress ? (
-            <CopyField value={lnAddress} />
-          ) : (
-            <>
-              <Text variant="caption" muted>
-                A reusable address like an email, so people can pay you any time.
-              </Text>
-              <Button small kind="secondary" title="Claim my address" onPress={() => setClaimOpen(true)} />
-            </>
-          )}
+          <Text variant="label">Get a username</Text>
+          <Text variant="caption" muted>
+            A name like an email, so people can pay you any time without a new code.
+          </Text>
+          <Button small kind="secondary" title="Pick my username" onPress={() => setClaimOpen(true)} />
         </Card>
       )}
 
-      <Sheet visible={amountOpen} onClose={() => setAmountOpen(false)} title="Request amount">
-        <Text variant="display" center>
-          {formatSats(Number(amount))}
+      <Pressable onPress={() => setMoreOpen(true)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, padding: space.md }}>
+        <Text variant="label" color={c.textMuted}>
+          More ways to receive
         </Text>
-        <Text variant="caption" muted center>
-          {fiatOf(Number(amount)) ?? " "}
-        </Text>
-        <NumPad value={amount} onChange={setAmount} decimals={0} max={9} />
+        <Feather name="chevron-right" size={16} color={c.textMuted} />
+      </Pressable>
+
+      <Sheet visible={amountOpen} onClose={() => setAmountOpen(false)} title="Ask for an amount">
+        <AmountDisplay input={input} />
+        <AmountPad input={input} />
         <Button
           title="Done"
+          disabled={input.sats <= 0}
           onPress={() => {
             setAmountOpen(false);
-            void makeInvoice(Number(amount));
+            setRequested(input.sats);
+            void makeInvoice(input.sats);
           }}
         />
       </Sheet>
       <ClaimAddressSheet visible={claimOpen} onClose={() => setClaimOpen(false)} />
+      <OnchainSheet visible={moreOpen} onClose={() => setMoreOpen(false)} />
     </Screen>
+  );
+}
+
+/** A plain bitcoin address, for exchanges and wallets that only send on-chain. */
+function OnchainSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [address, setAddress] = useState<string | null>(null);
+  useEffect(() => {
+    if (visible && !address) wallet.bitcoinAddress().then(setAddress).catch(toastError);
+  }, [visible, address]);
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Bitcoin address">
+      <Text variant="caption" muted>
+        For exchanges and wallets that can only send on-chain. It takes a few confirmations to arrive and carries a network fee.
+      </Text>
+      {address ? (
+        <>
+          <QR value={`bitcoin:${address}`} size={180} />
+          <CopyField value={address} short />
+        </>
+      ) : (
+        <Spinner />
+      )}
+    </Sheet>
   );
 }
 
 export function ClaimAddressSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const profileName = useSession((s) => s.profile.name);
-  const [name, setName] = useState(profileName.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const [name, setName] = useState(wallet.usernameFrom(profileName));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <Sheet visible={visible} onClose={onClose} title="Claim your address">
+    <Sheet visible={visible} onClose={onClose} title="Pick your username">
       <Field
-        label="Username"
         value={name}
         onChangeText={(t) => {
           setName(t);
@@ -158,8 +186,9 @@ export function ClaimAddressSheet({ visible, onClose }: { visible: boolean; onCl
         }}
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder="satoshi"
+        placeholder="jane"
         error={error}
+        hint="People pay you at this name."
       />
       <Button
         title="Claim"
@@ -169,9 +198,8 @@ export function ClaimAddressSheet({ visible, onClose }: { visible: boolean; onCl
           setBusy(true);
           try {
             const a = await wallet.claimLightningAddress(name);
-            useWallet.getState().setLightningAddress(a);
+            useWallet.getState().setLightningAddress(a.address, a.lnurl);
             success();
-            toast(`You're ${a}`, "success");
             onClose();
           } catch (e) {
             setError((e as Error).message);

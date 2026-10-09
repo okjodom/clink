@@ -10,6 +10,7 @@ import { SWAP_TIMING } from "../protocol/constants";
 import type { Direction } from "../protocol/swap";
 import { createSwap } from "../services/swapEngine";
 import { rankOffers, useDiscovery, usePayouts, type Match } from "../store/discovery";
+import { useWorthBackingUp } from "../hooks";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
 import { Avatar, Badge, Button, Card, Chip, Field, Notice, Row, Screen, Segmented, Spinner, Text, success } from "../ui/components";
@@ -81,7 +82,7 @@ export function NewSwapScreen() {
   return (
     <Screen
       back
-      title={fixedAgent ? (agents[fixedAgent]?.profile.name ?? "Swap") : "Swap"}
+      title={fixedAgent ? (agents[fixedAgent]?.profile.name ?? "Agent") : direction === "fiat_to_btc" ? "Add money" : "Cash out"}
       scroll={false}
       footer={
         <Button
@@ -100,15 +101,15 @@ export function NewSwapScreen() {
           setPicked(null);
         }}
         options={[
-          { value: "fiat_to_btc", label: "Buy bitcoin" },
-          { value: "btc_to_fiat", label: "Sell bitcoin" },
+          { value: "fiat_to_btc", label: "Add money" },
+          { value: "btc_to_fiat", label: "Cash out" },
         ]}
       />
 
       <View style={{ alignItems: "center", gap: 6 }}>
         <Pressable onPress={() => !fixedAgent && setCurrencyOpen(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
           <Text variant="label">
-            {info.flag} {direction === "fiat_to_btc" ? "You pay" : "You get"} · {currency}
+            {info.flag} {direction === "fiat_to_btc" ? "You add" : "You get"} · {currency}
           </Text>
           {!fixedAgent && <Feather name="chevron-down" size={16} color={c.textMuted} />}
         </Pressable>
@@ -117,7 +118,7 @@ export function NewSwapScreen() {
           {amount.endsWith(".") ? "." : ""}
         </Text>
         <Text muted>
-          {q ? `${direction === "fiat_to_btc" ? "You get" : "You send"} ${formatSats(q.sats)}` : problem ? " " : "Enter an amount"}
+          {q ? `${direction === "fiat_to_btc" ? "Lands in your wallet as" : "From your wallet:"} ${formatSats(q.sats)}` : problem ? " " : "Enter an amount"}
         </Text>
         {problem && (
           <Text variant="caption" color={c.danger}>
@@ -127,9 +128,9 @@ export function NewSwapScreen() {
       </View>
 
       {loading && !listings.length ? (
-        <Spinner label="Finding agents near you…" />
+        <Spinner label="Finding an agent near you…" />
       ) : !anyAmount.length ? (
-        <Notice tone="info" title={`No agents ${direction === "fiat_to_btc" ? "selling" : "buying"} bitcoin for ${currency} right now`}>
+        <Notice tone="info" title={`No ${currency} agents online right now`}>
           Agents come online throughout the day. Try another currency, or pull to refresh later.
         </Notice>
       ) : match ? (
@@ -191,6 +192,16 @@ export function NewSwapScreen() {
             );
           })}
         </ScrollView>
+        <Button
+          kind="ghost"
+          small
+          icon="map-pin"
+          title="Browse all agents"
+          onPress={() => {
+            setAgentsOpen(false);
+            nav.navigate("Agents");
+          }}
+        />
       </Sheet>
     </Screen>
   );
@@ -209,7 +220,8 @@ export function ReviewSwapScreen() {
   };
   const listing = useDiscovery((s) => s.agents[agentPk]);
   const offer = listing?.offers.find((o) => o.event.id === offerId);
-  const backedUp = useSession((s) => s.backedUp);
+  const worthBackingUp = useWorthBackingUp();
+  const balance = useWallet((s) => s.balance) ?? 0;
   const { saved, save } = usePayouts();
   const [payout, setPayout] = useState<ChannelDetails>(saved[channel] ?? {});
   const [busy, setBusy] = useState(false);
@@ -224,7 +236,8 @@ export function ReviewSwapScreen() {
   }
   const q = quote(offer, direction, amount)!;
   const buying = direction === "fiat_to_btc";
-  const needsBackup = buying && !backedUp;
+  // Small first top-ups go straight through; a backup is asked for once there's real money at stake.
+  const needsBackup = buying && worthBackingUp(balance + Number(q.sats));
   const limitOk = checkLimits(offer, direction, amount) === "ok";
   const payoutOk = buying || detailsComplete(channel, payout);
   const fiat = `${offer.currency} ${formatDecimal(amount)}`;
@@ -250,9 +263,9 @@ export function ReviewSwapScreen() {
       title="Review"
       footer={
         needsBackup ? (
-          <Button title="Back up to continue" icon="shield" kind="accent" onPress={() => nav.navigate("Backup")} />
+          <Button title="Protect your wallet to continue" icon="shield" kind="accent" onPress={() => nav.navigate("Backup")} />
         ) : (
-          <Button title={buying ? `Buy ${formatSats(q.sats)}` : `Sell ${formatSats(q.sats)}`} disabled={!limitOk || !payoutOk} loading={busy} onPress={start} />
+          <Button title={buying ? `Add ${fiat}` : `Cash out ${fiat}`} disabled={!limitOk || !payoutOk} loading={busy} onPress={start} />
         )
       }
     >
@@ -260,14 +273,14 @@ export function ReviewSwapScreen() {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ gap: 2 }}>
             <Text variant="caption" muted>
-              {buying ? "You pay" : "You send"}
+              {buying ? "You pay" : "From your wallet"}
             </Text>
             <Text variant="title">{buying ? fiat : formatSats(q.sats)}</Text>
           </View>
           <Feather name="arrow-right" size={22} color={c.textFaint} />
           <View style={{ gap: 2, alignItems: "flex-end" }}>
             <Text variant="caption" muted>
-              You get
+              {buying ? "Into your wallet" : "You get"}
             </Text>
             <Text variant="title" color={c.primary}>
               {buying ? formatSats(q.sats) : fiat}
@@ -291,17 +304,17 @@ export function ReviewSwapScreen() {
       )}
 
       <Card tone="alt" style={{ gap: space.md }}>
-        <Text variant="label">How this swap stays safe</Text>
+        <Text variant="label">How you're protected</Text>
         {(buying
           ? [
               ["lock", `The agent locks ${formatSats(q.sats)} for you first. You'll see it in your wallet before you pay.`],
               ["send", ch.fields.length ? `Then you send ${fiat} via ${ch.short} within about ${Math.round(SWAP_TIMING.payWindow / 60)} minutes.` : `Then you meet and pay ${fiat} in cash within about ${Math.round(SWAP_TIMING.payWindow / 60)} minutes.`],
-              ["unlock", "When the agent confirms your payment, the bitcoin unlocks into your wallet."],
+              ["unlock", "When the agent confirms your payment, the money unlocks into your wallet."],
             ]
           : [
               ["lock", `Your ${formatSats(q.sats)} are locked, not sent. The agent can't take them yet.`],
               ["send", ch.fields.length ? `The agent sends ${fiat} to your ${ch.short}.` : `You meet the agent and collect ${fiat} in cash. Agree where in the chat.`],
-              ["unlock", "You release the bitcoin only after you have the money. If it never arrives, the lock returns to you."],
+              ["unlock", "You release it only after you have the cash. If it never arrives, it comes back to you."],
             ]
         ).map(([icon, text]) => (
           <View key={icon} style={{ flexDirection: "row", gap: space.md }}>
@@ -313,8 +326,8 @@ export function ReviewSwapScreen() {
         ))}
       </Card>
       {needsBackup && (
-        <Notice tone="warning" title="Back up before you buy">
-          Bitcoin will land in this wallet. Save your recovery phrase first so you can't lose it.
+        <Notice tone="warning" title="Protect your wallet first">
+          Money will land in this wallet. Write down your 12 words first so you can never lose it.
         </Notice>
       )}
     </Screen>

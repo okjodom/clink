@@ -3,11 +3,10 @@ import { useNavigation } from "@react-navigation/native";
 import React from "react";
 import { View } from "react-native";
 
-import { useMe } from "../hooks";
+import { useMe, useMoney } from "../hooks";
 import type { SwapItem } from "../hooks";
 import { describeSwap, STEPS, timeAgo } from "../lib/swapView";
 import { channelInfo } from "../lib/channels";
-import { formatSatsShort } from "../lib/money";
 import { unreadCount, useSwaps } from "../store/swaps";
 import type { WalletTx } from "../services/wallet";
 import { Avatar, Badge, Pulse, Row, Text, toneColors } from "./components";
@@ -79,50 +78,59 @@ export function Steps({ step, tone }: { step: number; tone: "danger" | string })
 }
 
 /** Swap escrow payments carry "Pontspark swap <id prefix>" (or the older "Pontmore swap"). */
-function useSwapLabel(tx: WalletTx): string | null {
+function useSwapOf(tx: WalletTx): { label: string; id?: string } | null {
   const prefix = tx.description?.match(/^Pont(?:spark|more) swap ([0-9a-f]{8})$/)?.[1];
   const rec = useSwaps((s) => (prefix ? Object.values(s.records).find((r) => r.id.startsWith(prefix)) : undefined));
   if (!prefix) return null;
   const who = rec?.local.counterpartyName;
-  const bought = tx.direction === "in";
-  return who ? (bought ? `Bought from ${who}` : `Sold to ${who}`) : bought ? "Bought bitcoin" : "Sold bitcoin";
+  const added = tx.direction === "in";
+  // Agents trade bitcoin as a business; to customers it's just their money moving.
+  if (rec?.role === "agent") return { id: rec.id, label: who ? (added ? `Bought from ${who}` : `Sold to ${who}`) : added ? "Bought bitcoin" : "Sold bitcoin" };
+  return {
+    id: rec?.id,
+    label: who ? (added ? `Added via ${who}` : `Cashed out via ${who}`) : added ? "Added money" : "Cashed out",
+  };
 }
 
-export function TxRow({ tx, fiat, hidden }: { tx: WalletTx; fiat?: string | null; hidden?: boolean }) {
+export function TxRow({ tx, hidden }: { tx: WalletTx; hidden?: boolean }) {
   const c = useColors();
+  const nav = useNavigation<any>();
+  const money = useMoney();
   const incoming = tx.direction === "in";
-  const swapLabel = useSwapLabel(tx);
+  const swap = useSwapOf(tx);
+  const swapLabel = swap?.label;
   const label =
     swapLabel ??
     (tx.kind === "htlc"
       ? incoming
         ? tx.htlc?.status === "waiting"
-          ? "Swap lock (incoming)"
-          : "Swap received"
+          ? "On its way"
+          : "Added money"
         : tx.htlc?.status === "returned"
-          ? "Swap lock returned"
+          ? "Returned to you"
           : tx.htlc?.status === "waiting"
-            ? "Locked for swap"
-            : "Swap sent"
+            ? "Set aside for cash out"
+            : "Cashed out"
       : tx.description || (incoming ? "Received" : "Sent"));
   const icon: React.ComponentProps<typeof Feather>["name"] =
     tx.kind === "htlc" || swapLabel ? "repeat" : tx.kind === "onchain" ? "link" : incoming ? "arrow-down-left" : "arrow-up-right";
   const date = new Date(tx.timestamp * 1000);
   return (
     <Row
+      onPress={swap?.id ? () => nav.navigate("SwapDetail", { id: swap.id }) : undefined}
       icon={icon}
       iconBg={incoming ? c.primarySoft : c.surfaceAlt}
       iconColor={incoming ? c.primary : c.text}
       title={label}
-      subtitle={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}${tx.status === "pending" ? " · pending" : tx.status === "failed" ? " · failed" : ""}${!incoming && tx.feeSats > 0n ? ` · fee ${tx.feeSats} sats` : ""}`}
+      subtitle={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}${tx.status === "pending" ? " · pending" : tx.status === "failed" ? " · failed" : ""}${!incoming && tx.feeSats > 0n ? ` · fee ${money.primary(tx.feeSats)}` : ""}`}
       right={
         <View style={{ alignItems: "flex-end" }}>
           <Text variant="label" color={incoming ? c.primary : c.text}>
-            {hidden ? "••••" : `${incoming ? "+" : "−"}${formatSatsShort(tx.amountSats)}`}
+            {hidden ? "••••" : `${incoming ? "+" : "−"}${money.primary(tx.amountSats)}`}
           </Text>
-          {fiat && !hidden && (
+          {!hidden && money.secondary(tx.amountSats) && (
             <Text variant="caption" faint>
-              {fiat}
+              {money.secondary(tx.amountSats)}
             </Text>
           )}
         </View>

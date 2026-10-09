@@ -12,7 +12,9 @@
 
 # Pontspark
 
-**A bitcoin wallet you hold yourself, with a built-in way to swap bitcoin for M-Pesa, mobile money, bank transfers or cash with real people near you.**
+**Money that moves like a message.** Download it, pick a name, and you can get paid, pay anyone, and add money or cash out to M-Pesa, mobile money or cash through people near you.
+
+Under the hood it's a bitcoin wallet only you hold, with no bank, account or server in the middle. That part is there for anyone who goes looking (Me → *Your keys, your money*), not something you need to understand to use it.
 
 Pontspark is a mobile client for the [Pontmore protocol](https://github.com/pontmore/protocol). Every swap is coordinated in public, signed Nostr events, and the bitcoin is locked in a Spark HTLC between the two people trading. Nobody else ever holds it. There is no Pontspark server, no account and no sign-up: the app talks to Nostr relays and to your own [Breez](https://breez.technology) Spark wallet, and nothing else.
 

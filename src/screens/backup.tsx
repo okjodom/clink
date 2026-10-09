@@ -3,6 +3,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import React, { useMemo, useState } from "react";
 import { View } from "react-native";
 
+import { BRAND } from "../brand";
 import { storedMnemonic } from "../services/wallet";
 import { useSession } from "../store/session";
 import { Button, Card, Chip, Notice, Screen, Text, success } from "../ui/components";
@@ -63,7 +64,7 @@ export function BackupScreen() {
       <Screen back title="Back up" footer={<Button title="Show my recovery phrase" icon="eye" onPress={reveal} />}>
         <Text variant="title">Your recovery phrase is your wallet</Text>
         <Text muted>
-          12 words that restore your bitcoin, your identity and your agent setup on any phone. Pontspark can't recover them for you.
+          {`12 words that bring back your money, your username and your agent setup on any phone. ${BRAND.name} can't recover them for you, because ${BRAND.name} never has them.`}
         </Text>
         <Card tone="alt" style={{ gap: space.md }}>
           {[

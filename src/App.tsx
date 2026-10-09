@@ -12,7 +12,7 @@ import { resumeEngine, startEngine, stopEngine } from "./services/swapEngine";
 import { useSession } from "./store/session";
 import { useWallet } from "./store/wallet";
 import { Logo } from "./ui/components";
-import { useCelebrateFinishedSwaps } from "./hooks";
+import { useCelebrateFinishedSwaps, useCelebrateIncoming } from "./hooks";
 import { CelebrationHost } from "./ui/celebrate";
 import { ConfirmHost, ToastHost } from "./ui/extras";
 import { useColors, useIsDark } from "./ui/theme";
@@ -59,6 +59,7 @@ export default function App() {
   const phase = useSession((s) => s.phase);
   useBoot();
   useCelebrateFinishedSwaps();
+  useCelebrateIncoming();
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(c.bg).catch(() => undefined);

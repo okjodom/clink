@@ -33,6 +33,10 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { BREEZ_API_KEY, BREEZ_NETWORK } from "./config";
 import { deleteSecret, getSecret, setSecret } from "./secure";
 import { isValidMnemonic, newMnemonic, normaliseMnemonic } from "../lib/keys";
+import { BRAND } from "../brand";
+import { usernameFrom } from "../lib/username";
+
+export { usernameFrom };
 
 const MNEMONIC_KEY = "wallet.mnemonic";
 const STORAGE_DIR = "breez-spark";
@@ -271,20 +275,42 @@ export async function bitcoinAddress(): Promise<string> {
   return res.paymentRequest;
 }
 
-export async function lightningAddress(): Promise<string | null> {
-  const s = await connect();
-  const info = await s.getLightningAddress();
-  return info?.lightningAddress ?? null;
+export interface AddressInfo {
+  address: string;
+  lnurl: string;
 }
 
-export async function claimLightningAddress(username: string): Promise<string> {
+export async function lightningAddressInfo(): Promise<AddressInfo | null> {
+  const s = await connect();
+  const info = await s.getLightningAddress();
+  return info ? { address: info.lightningAddress, lnurl: info.lnurl.bech32 } : null;
+}
+
+export async function claimLightningAddress(username: string): Promise<AddressInfo> {
   const s = await connect();
   const clean = username.trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9._-]{2,30}$/.test(clean)) throw new Error("Use 3–31 letters, numbers, dots or dashes.");
   const free = await s.checkLightningAddressAvailable({ username: clean });
   if (!free) throw new Error("That name is taken. Try another.");
-  const info = await s.registerLightningAddress({ username: clean, description: "Pontspark wallet" });
-  return info.lightningAddress;
+  const info = await s.registerLightningAddress({ username: clean, description: `${BRAND.name} wallet` });
+  return { address: info.lightningAddress, lnurl: info.lnurl.bech32 };
+}
+
+/**
+ * Claim `base`, or the first free variant of it (base7, base42…), so picking
+ * a name never ends on "that name is taken".
+ */
+export async function claimFirstFree(base: string): Promise<AddressInfo> {
+  const s = await connect();
+  const root = usernameFrom(base).padEnd(3, "0");
+  const candidates = [root, ...Array.from({ length: 5 }, (_, i) => `${root}${Math.floor(Math.random() * 10 ** (i + 1))}`)];
+  for (const username of candidates) {
+    if (await s.checkLightningAddressAvailable({ username })) {
+      const info = await s.registerLightningAddress({ username, description: `${BRAND.name} wallet` });
+      return { address: info.lightningAddress, lnurl: info.lnurl.bech32 };
+    }
+  }
+  throw new Error("Couldn't find a free name. Try another.");
 }
 
 // -- send --------------------------------------------------------------------
@@ -350,7 +376,7 @@ function fromInput(input: InputType, raw: string, amountHint?: bigint): ParsedIn
       if (m) return fromInput(m, raw, amount);
     }
   }
-  throw new Error("That doesn't look like something Pontspark can pay yet.");
+  throw new Error(`That doesn't look like something ${BRAND.name} can pay yet.`);
 }
 
 export interface PreparedSend {

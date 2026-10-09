@@ -3,6 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import React, { useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 
+import { BRAND } from "../brand";
 import { useActiveSwaps, useNow, useSwapList } from "../hooks";
 import { earningsIn } from "../lib/earnings";
 import { channelInfo, channelsForCurrency, currencyInfo, CURRENCIES, detailsComplete, validateDetails, type ChannelDetails } from "../lib/channels";
@@ -44,7 +45,7 @@ export function DeskScreen() {
         <Empty
           icon="briefcase"
           title="Set up your agent desk"
-          body="Choose the currencies and payment channels you serve and your pricing. Customers find you on Nostr."
+          body="Choose the currencies and payment channels you serve and your pricing. Customers near you will find you."
           action={<Button title="Set up" icon="arrow-right" onPress={() => nav.navigate("AgentSetup")} />}
         />
       </Screen>
@@ -108,7 +109,7 @@ export function DeskScreen() {
         </Card>
       )}
 
-      {online && <Text variant="caption" faint center>Keep Pontspark open while you're online so you can respond to requests.</Text>}
+      {online && <Text variant="caption" faint center>{`Keep ${BRAND.name} open while you're online so you can respond to requests.`}</Text>}
 
       <Section title={`Requests${requests.length ? ` · ${requests.length}` : ""}`}>
         {requests.length === 0 ? (

@@ -29,6 +29,12 @@ interface SessionState {
   currency: string;
   profile: Profile;
   hideBalance: boolean;
+  /** Amounts lead with sats instead of the display currency. */
+  preferSats: boolean;
+  /** A new wallet still has to pick the name people pay it by. */
+  needsName: boolean;
+  /** People this wallet paid, newest first, for one-tap repeat payments. */
+  recents: string[];
   hydrated: boolean;
 
   boot(): Promise<void>;
@@ -40,6 +46,9 @@ interface SessionState {
   setCurrency(code: string): void;
   setProfile(p: Profile): void;
   toggleHideBalance(): void;
+  togglePreferSats(): void;
+  finishNaming(): void;
+  addRecent(to: string): void;
   signOut(): Promise<void>;
 }
 
@@ -54,6 +63,9 @@ export const useSession = create<SessionState>()(
       currency: "KES",
       profile: { name: "", about: "" },
       hideBalance: false,
+      preferSats: false,
+      needsName: false,
+      recents: [],
       hydrated: false,
 
       async boot() {
@@ -68,13 +80,13 @@ export const useSession = create<SessionState>()(
 
       async createWallet() {
         const mnemonic = await wallet.createMnemonic();
-        set({ keys: deriveKeyRing(mnemonic), backedUp: false, phase: "ready" });
+        set({ keys: deriveKeyRing(mnemonic), backedUp: false, needsName: true, phase: "ready" });
       },
 
       async restoreWallet(phrase) {
         const mnemonic = await wallet.restoreMnemonic(phrase);
         // A restored phrase is, by definition, already written down.
-        set({ keys: deriveKeyRing(mnemonic), backedUp: true, phase: "ready" });
+        set({ keys: deriveKeyRing(mnemonic), backedUp: true, needsName: false, phase: "ready" });
       },
 
       setMode: (mode) => set({ mode }),
@@ -88,10 +100,13 @@ export const useSession = create<SessionState>()(
       setCurrency: (currency) => set({ currency }),
       setProfile: (profile) => set({ profile }),
       toggleHideBalance: () => set({ hideBalance: !get().hideBalance }),
+      togglePreferSats: () => set({ preferSats: !get().preferSats }),
+      finishNaming: () => set({ needsName: false }),
+      addRecent: (to) => set({ recents: [to, ...get().recents.filter((r) => r !== to)].slice(0, 8) }),
 
       async signOut() {
         await wallet.wipeWallet();
-        set({ keys: null, phase: "onboarding", backedUp: false, mode: "user", profile: { name: "", about: "" } });
+        set({ keys: null, phase: "onboarding", backedUp: false, mode: "user", needsName: false, recents: [], profile: { name: "", about: "" } });
       },
     }),
     {
@@ -104,6 +119,9 @@ export const useSession = create<SessionState>()(
         currency: s.currency,
         profile: s.profile,
         hideBalance: s.hideBalance,
+        preferSats: s.preferSats,
+        needsName: s.needsName,
+        recents: s.recents,
       }),
       onRehydrateStorage: () => () => useSession.setState({ hydrated: true }),
     },
