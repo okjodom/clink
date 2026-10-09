@@ -1,6 +1,6 @@
 /**
  * DEV ONLY: drive wallet primitives from adb to probe escrow options, e.g.
- *   adb shell am start -a android.intent.action.VIEW -d "pontmore://devprobe/hodl?amount=20" xyz.pontmore.pontspark.dev
+ *   adb shell am start -a android.intent.action.VIEW -d "pontmore://devprobe/hodl?amount=20" xyz.pontmore.simple.dev
  * Results are logged to Metro as "[probe] ...".
  */
 import * as Linking from "expo-linking";

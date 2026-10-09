@@ -3,9 +3,11 @@ const { version } = require("./package.json");
 const APP_ENV = process.env.EXPO_PUBLIC_APP_ENV || "development";
 const IS_PRODUCTION = APP_ENV === "production";
 
+// Own app ids so this redesign installs next to Pontspark for side-by-side testing.
+// The pontmore:// scheme is shared on purpose: agent links open in either app.
 const NATIVE = IS_PRODUCTION
-  ? { name: "Pontspark", scheme: "pontmore", id: "xyz.pontmore.pontspark" }
-  : { name: "Pontspark Dev", scheme: "pontmore", id: "xyz.pontmore.pontspark.dev" };
+  ? { name: "Spark Simple", scheme: "pontmore", id: "xyz.pontmore.simple" }
+  : { name: "Simple Dev", scheme: "pontmore", id: "xyz.pontmore.simple.dev" };
 
 /** 1.2.3 -> 1002003, so every release installs over the previous one. */
 function versionCode(semver) {
@@ -19,7 +21,7 @@ const CAMERA_COPY =
 export default {
   expo: {
     name: NATIVE.name,
-    slug: "pontspark",
+    slug: "pontspark-simple",
     scheme: NATIVE.scheme,
     version,
     orientation: "portrait",

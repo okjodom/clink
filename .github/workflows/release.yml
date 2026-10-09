@@ -99,7 +99,7 @@ jobs:
           fi
 
           "$tools/aapt2" dump badging "$apk" | head -1 | tee badging.txt
-          grep -q "name='xyz.pontmore.pontspark'" badging.txt || { echo "::error::Wrong application id"; exit 1; }
+          grep -q "name='xyz.pontmore.simple'" badging.txt || { echo "::error::Wrong application id"; exit 1; }
           grep -q "versionName='$VERSION'" badging.txt || { echo "::error::APK is not version $VERSION"; exit 1; }
 
       - name: Attach the APK to the release
