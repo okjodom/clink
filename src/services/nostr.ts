@@ -36,13 +36,20 @@ export function sign(template: EventTemplate, sk: Uint8Array): Event {
 export async function publish(event: Event): Promise<Event> {
   if (!relays.length) throw new Error("No relays configured");
   const targets = [...relays];
-  const results = await Promise.allSettled(p().publish(targets, event, { maxWait: 8000 }));
-  if (!results.some((r) => r.status === "fulfilled")) {
-    const reason = results.map((r) => (r.status === "rejected" ? String(r.reason) : "")).find(Boolean);
+  const attempts = p().publish(targets, event, { maxWait: 8000 });
+  // Replication continues after the first acknowledgement; a slow relay must
+  // not add its entire timeout to every step of a multi-event swap.
+  void Promise.allSettled(attempts).then((results) => {
+    if (!results.some((r) => r.status === "fulfilled")) return;
+    const missed = targets.filter((_, i) => results[i].status === "rejected");
+    if (missed.length) retryPublish(event, missed, 1);
+  });
+  try {
+    await Promise.any(attempts);
+  } catch (error) {
+    const reason = error instanceof AggregateError ? error.errors.map(String).find(Boolean) : String(error);
     throw new Error(`No relay accepted the event${reason ? `: ${reason}` : ""}`);
   }
-  const missed = targets.filter((_, i) => results[i].status === "rejected");
-  if (missed.length) retryPublish(event, missed, 1);
   return event;
 }
 
