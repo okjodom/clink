@@ -7,9 +7,11 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { DEFAULT_RELAYS } from "../services/config";
+import { recoverIdentity, restoreLightningAddress } from "../services/identity";
 import { setRelays } from "../services/nostr";
 import * as wallet from "../services/wallet";
 import { deriveKeyRing, type KeyRing } from "../lib/keys";
+import { useWallet } from "./wallet";
 
 export type Mode = "user" | "agent";
 export type Phase = "loading" | "onboarding" | "ready";
@@ -81,12 +83,33 @@ export const useSession = create<SessionState>()(
       async createWallet() {
         const mnemonic = await wallet.createMnemonic();
         set({ keys: deriveKeyRing(mnemonic), backedUp: false, needsName: true, phase: "ready" });
+        // New wallets keep their money steady in dollars; one tap on the balance switches to bitcoin.
+        void wallet
+          .setHoldIn("dollars")
+          .then(() => useWallet.getState().refresh())
+          .catch(() => undefined);
       },
 
       async restoreWallet(phrase) {
         const mnemonic = await wallet.restoreMnemonic(phrase);
-        // A restored phrase is, by definition, already written down.
-        set({ keys: deriveKeyRing(mnemonic), backedUp: true, needsName: false, phase: "ready" });
+        const keys = deriveKeyRing(mnemonic);
+        // The phrase brings back the keys; who you were (name, bio, username,
+        // relays) comes back from what those keys published.
+        const found = await recoverIdentity(keys).catch(() => null);
+        if (found?.relays) get().setRelays(found.relays);
+        set({
+          keys,
+          // A restored phrase is, by definition, already written down.
+          backedUp: true,
+          profile: { name: found?.name ?? "", about: found?.about ?? "" },
+          // Nothing found: ask for a name, as for a new wallet.
+          needsName: !found?.name,
+          recents: [],
+          phase: "ready",
+        });
+        void restoreLightningAddress(found?.lud16)
+          .then((a) => a && useWallet.getState().setLightningAddress(a.address, a.lnurl))
+          .catch(() => undefined);
       },
 
       setMode: (mode) => set({ mode }),

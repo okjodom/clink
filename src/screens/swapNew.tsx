@@ -162,7 +162,7 @@ export function NewSwapScreen() {
               left={<Text variant="title">{cur.flag}</Text>}
               title={`${cur.code} · ${cur.name}`}
               subtitle={cur.country}
-              right={cur.code === currency ? <Feather name="check" size={18} color={c.primary} /> : undefined}
+              right={cur.code === currency ? <Feather name="check" size={18} color={c.primaryInk} /> : undefined}
               onPress={() => {
                 setCurrency(cur.code);
                 setPicked(null);
@@ -282,7 +282,7 @@ export function ReviewSwapScreen() {
             <Text variant="caption" muted>
               {buying ? "Into your wallet" : "You get"}
             </Text>
-            <Text variant="title" color={c.primary}>
+            <Text variant="title" color={c.primaryInk}>
               {buying ? formatSats(q.sats) : fiat}
             </Text>
           </View>
@@ -318,7 +318,7 @@ export function ReviewSwapScreen() {
             ]
         ).map(([icon, text]) => (
           <View key={icon} style={{ flexDirection: "row", gap: space.md }}>
-            <Feather name={icon as "lock"} size={16} color={c.primary} style={{ marginTop: 2 }} />
+            <Feather name={icon as "lock"} size={16} color={c.primaryInk} style={{ marginTop: 2 }} />
             <Text variant="caption" style={{ flex: 1 }}>
               {text}
             </Text>

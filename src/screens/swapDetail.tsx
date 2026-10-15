@@ -288,7 +288,7 @@ export function SwapDetailScreen() {
       {/* Lock status for whoever is receiving bitcoin */}
       {iReceiveBtc && ["secured", "fiat_sent", "fiat_confirmed", "settlement_authorized"].includes(st.status) && (
         <Card tone={lock?.ok ? "primary" : "alt"} style={{ flexDirection: "row", alignItems: "center" }}>
-          <Feather name={lock?.ok ? "lock" : "loader"} size={20} color={lock?.ok ? c.primary : c.textMuted} />
+          <Feather name={lock?.ok ? "lock" : "loader"} size={20} color={lock?.ok ? c.primaryInk : c.textMuted} />
           <View style={{ flex: 1 }}>
             <Text variant="label">{lock?.ok ? `${view.satsLabel} locked for you` : "Checking the lock…"}</Text>
             <Text variant="caption" muted>
@@ -548,7 +548,7 @@ export function ChatScreen() {
             <View style={{ alignItems: "center", paddingBottom: space.lg, gap: space.sm }}>
               <Chip icon="lock" label="End-to-end encrypted" />
               <Text variant="caption" faint center style={{ maxWidth: 280 }}>
-                Only you and {them} can read these messages. Never share your recovery phrase.
+                Only you and {them} can read these messages. Never share your recovery words.
               </Text>
             </View>
           }

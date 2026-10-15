@@ -35,7 +35,7 @@ export function NumPad({ value, onChange, decimals = 2, max = 12 }: { value: str
           key={k}
           onPress={() => press(k)}
           onLongPress={k === "del" ? () => onChange("0") : undefined}
-          style={({ pressed }) => [styles.key, { backgroundColor: pressed ? c.surfaceAlt : "transparent" }]}
+          style={styles.key}
           disabled={k === "." && decimals === 0}
         >
           {k === "del" ? (
@@ -95,7 +95,7 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
 export function QR({ value, size = 220 }: { value: string; size?: number }) {
   return (
     <View style={styles.qr}>
-      <QRCode value={value} size={size} bgColor="#ffffff" fgColor="#101a13" />
+      <QRCode value={value} size={size} bgColor="#ffffff" fgColor="#14110f" />
     </View>
   );
 }
@@ -114,7 +114,7 @@ export function CopyField({ value, label, short, display }: { value: string; lab
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
-      style={({ pressed }) => [styles.copy, { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}
+      style={[styles.copy, { backgroundColor: c.surface, borderColor: c.border }]}
     >
       <View style={{ flex: 1, gap: 2 }}>
         {label && (
@@ -126,7 +126,29 @@ export function CopyField({ value, label, short, display }: { value: string; lab
           {shown}
         </Text>
       </View>
-      <Feather name={copied ? "check" : "copy"} size={18} color={copied ? c.primary : c.textMuted} />
+      <Feather name={copied ? "check" : "copy"} size={18} color={copied ? c.primaryInk : c.textMuted} />
+    </Pressable>
+  );
+}
+
+/** Just the copy icon, for a value already shown beside it. */
+export function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
+  const c = useColors();
+  const [copied, setCopied] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={copied ? "Copied" : label}
+      hitSlop={12}
+      onPress={async () => {
+        await Clipboard.setStringAsync(value);
+        success();
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      style={[styles.copyIcon, { backgroundColor: c.surfaceAlt }]}
+    >
+      <Feather name={copied ? "check" : "copy"} size={16} color={copied ? c.primaryInk : c.textMuted} />
     </Pressable>
   );
 }
@@ -186,7 +208,7 @@ export function ConfirmHost() {
         <View style={{ gap: space.lg }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
             <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: danger ? c.dangerSoft : c.primarySoft }}>
-              <Feather name={current.icon ?? (danger ? "alert-triangle" : "check-circle")} size={20} color={danger ? c.danger : c.primary} />
+              <Feather name={current.icon ?? (danger ? "alert-triangle" : "check-circle")} size={20} color={danger ? c.danger : c.primaryInk} />
             </View>
             <Text variant="title" style={{ flex: 1 }}>
               {current.title}
@@ -245,6 +267,7 @@ const styles = StyleSheet.create({
   key: { width: "33.33%", height: 64, alignItems: "center", justifyContent: "center", borderRadius: radius.lg },
   sheet: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.lg, gap: space.md, maxHeight: "92%" },
   grabber: { width: 40, height: 5, borderRadius: 3, alignSelf: "center", marginBottom: space.sm },
+  copyIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   qr: { padding: 16, backgroundColor: "#ffffff", borderRadius: radius.lg, alignSelf: "center" },
   copy: { flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg, borderRadius: radius.md, borderWidth: 1 },
   toast: {

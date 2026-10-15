@@ -98,7 +98,7 @@ function AgentCard({ listing, currency, onPress }: { listing: AgentListing; curr
         <Badge label="Online" tone="success" />
       </View>
       <View style={{ flexDirection: "row", gap: space.md }}>
-        <PriceBox label="Buy" price={offer.buy?.price} currency={offer.currency} color={c.primary} />
+        <PriceBox label="Buy" price={offer.buy?.price} currency={offer.currency} color={c.primaryInk} />
         <PriceBox label="Sell" price={offer.sell?.price} currency={offer.currency} color={c.accent} />
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>

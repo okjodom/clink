@@ -13,7 +13,6 @@ import {
   Text as RNText,
   TextInput,
   View,
-  type PressableProps,
   type StyleProp,
   type TextInputProps,
   type TextProps,
@@ -22,7 +21,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Circle, G, Path, Rect } from "react-native-svg";
 
 import { radius, space, type, useColors, type Colors } from "./theme";
 
@@ -105,7 +104,7 @@ export function Screen({
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1 }}
-          refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.primary} /> : undefined}
+          refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.primaryInk} /> : undefined}
         >
           {body}
         </ScrollView>
@@ -151,7 +150,7 @@ export function IconButton({ name, onPress, label }: { name: IconName; onPress: 
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.iconBtn, { backgroundColor: c.surface, opacity: pressed ? 0.6 : 1 }]}
+      style={[styles.iconBtn, { backgroundColor: c.surface }]}
     >
       <Feather name={name} size={19} color={c.text} />
     </Pressable>
@@ -171,7 +170,7 @@ export function Card({ children, style, onPress, tone }: { children: React.React
         tap();
         onPress();
       }}
-      style={({ pressed }) => ({ flex, flexBasis, flexGrow, flexShrink, minWidth, maxWidth, width, alignSelf, opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] })}
+      style={{ flex, flexBasis, flexGrow, flexShrink, minWidth, maxWidth, width, alignSelf }}
     >
       <View style={[styles.card, { backgroundColor: bg }, rest, flex !== undefined && { flex: 1 }]}>{children}</View>
     </Pressable>
@@ -237,7 +236,6 @@ export function Row({
         tap();
         onPress();
       }}
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
       {content}
     </Pressable>
@@ -327,9 +325,9 @@ export function Button({
   const c = useColors();
   const palette: Record<ButtonKind, { bg: string; fg: string; border?: string }> = {
     primary: { bg: c.primary, fg: c.primaryText },
-    accent: { bg: c.accent, fg: "#1d1408" },
+    accent: { bg: c.accent, fg: c.accentText },
     secondary: { bg: c.surface, fg: c.text, border: c.border },
-    ghost: { bg: "transparent", fg: c.primary },
+    ghost: { bg: "transparent", fg: c.primaryInk },
     danger: { bg: c.dangerSoft, fg: c.danger },
   };
   const p = palette[kind];
@@ -342,13 +340,7 @@ export function Button({
         tap();
         void onPress();
       }}
-      style={({ pressed }) => [
-        styles.button,
-        small && styles.buttonSmall,
-        { backgroundColor: p.bg, borderColor: p.border ?? "transparent", opacity: disabled ? 0.45 : pressed ? 0.85 : 1 },
-        { transform: [{ scale: pressed && !off ? 0.98 : 1 }] },
-        style,
-      ]}
+      style={[styles.button, small && styles.buttonSmall, { backgroundColor: p.bg, borderColor: p.border ?? "transparent", opacity: disabled ? 0.45 : 1 }, style]}
     >
       {loading ? (
         <ActivityIndicator color={p.fg} />
@@ -373,7 +365,7 @@ export function ActionTile({ icon, label, onPress, tone = "default" }: { icon: I
         tap();
         onPress();
       }}
-      style={({ pressed }) => [{ alignItems: "center", gap: 6, flex: 1, opacity: pressed ? 0.7 : 1 }]}
+      style={{ alignItems: "center", gap: 6, flex: 1 }}
     >
       <View style={[styles.tile, { backgroundColor: hero ? "rgba(247,243,234,0.12)" : c.surface }]}>
         <Feather name={icon} size={22} color={hero ? c.heroText : c.text} />
@@ -493,7 +485,7 @@ export type Tone = "neutral" | "success" | "warning" | "danger" | "info" | "acce
 export function toneColors(c: Colors, tone: Tone) {
   switch (tone) {
     case "success":
-      return { bg: c.primarySoft, fg: c.primary };
+      return { bg: c.positiveSoft, fg: c.positive };
     case "warning":
       return { bg: c.warningSoft, fg: c.warning };
     case "danger":
@@ -569,7 +561,7 @@ export function Spinner({ label }: { label?: string }) {
   const c = useColors();
   return (
     <View style={{ alignItems: "center", gap: space.md, paddingVertical: space.xl }}>
-      <ActivityIndicator color={c.primary} />
+      <ActivityIndicator color={c.primaryInk} />
       {label && (
         <Text variant="caption" muted>
           {label}
@@ -615,16 +607,71 @@ export function Pulse({ color, size = 10 }: { color: string; size?: number }) {
 
 // -- brand & identity ----------------------------------------------------------------
 
+const GOLD = "#ffb020";
+const CREAM = "#fbf6ec";
+const INK = "#14110f";
+
+/**
+ * Two coins meeting, with a spark where they touch. Same shapes as
+ * scripts/brand-assets.mjs, which draws the app icon and splash.
+ */
+function Mark() {
+  return (
+    <G>
+      {[
+        [318, 590],
+        [706, 434],
+      ].map(([cx, cy]) => (
+        <G key={cx}>
+          <Circle cx={cx} cy={cy} r={209} fill={INK} />
+          <Circle cx={cx} cy={cy} r={150} fill="none" stroke={GOLD} strokeWidth={22} />
+        </G>
+      ))}
+      <Path d="M512 382 Q526 498 642 512 Q526 526 512 642 Q498 526 382 512 Q498 498 512 382 Z" fill={GOLD} stroke={GOLD} strokeWidth={52} strokeLinejoin="round" />
+      <Path d="M512 382 Q526 498 642 512 Q526 526 512 642 Q498 526 382 512 Q498 498 512 382 Z" fill={CREAM} />
+    </G>
+  );
+}
+
+/** The app tile: reads on any background, light or dark. */
 export function Logo({ size = 40 }: { size?: number }) {
   return (
-    <Svg width={size} height={size * 0.9} viewBox="0 150 1500 1280">
-      <Path fill="#2f9e44" d="M305 191 L41 1382 L1455 1387 Z" />
-      <Path fill="#f08c00" fillOpacity={0.92} d="M1195 192 L1459 1382 L45 1387 Z" />
+    <Svg width={size} height={size} viewBox="0 0 1024 1024" accessibilityLabel="Clink">
+      <Rect width={1024} height={1024} rx={230} fill={GOLD} />
+      <G transform="translate(512 512) scale(0.86) translate(-512 -512)">
+        <Mark />
+      </G>
     </Svg>
   );
 }
 
-const AVATAR_COLORS = ["#2f9e44", "#f08c00", "#2b6cb0", "#9c4dcc", "#d64545", "#0f8a8a", "#b96b00", "#3d5a80"];
+/** Lowercase "clink"; the dot on the i is a gold coin. */
+/** Pass `dot` when drawing on gold, where the gold dot would vanish. */
+export function Wordmark({ height = 32, color = INK, dot = GOLD }: { height?: number; color?: string; dot?: string }) {
+  return (
+    <Svg width={(height * 540) / 220} height={height} viewBox="0 0 540 220" accessibilityLabel="Clink">
+      <G transform="translate(14 0)" fill="none" stroke={color} strokeWidth={30} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M100 116 A50 50 0 1 0 100 184" />
+        <Path d="M158 30 V200" />
+        <Path d="M218 106 V200" />
+        <Path d="M278 200 V106 M278 150 A50 50 0 0 1 378 150 V200" />
+        <Path d="M438 30 V200 M500 106 L440 160 M462 142 L506 200" />
+      </G>
+      <Circle cx={232} cy={48} r={21} fill={dot} />
+    </Svg>
+  );
+}
+
+/** The spark on its own, for the Clink moment. */
+export function Spark({ size = 48, color = CREAM }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="382 382 260 260">
+      <Path d="M512 382 Q526 498 642 512 Q526 526 512 642 Q498 526 382 512 Q498 498 512 382 Z" fill={color} />
+    </Svg>
+  );
+}
+
+const AVATAR_COLORS = ["#177a4a", "#b86e00", "#2b6cb0", "#8e5bd0", "#b83c27", "#0f8a8a", "#8f5500", "#3d5a80"];
 
 export function Avatar({ pk, name, size = 44 }: { pk: string; name?: string; size?: number }) {
   const seed = /^[0-9a-f]{6}/i.test(pk) ? parseInt(pk.slice(0, 6), 16) : [...pk].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
@@ -641,15 +688,6 @@ export function Avatar({ pk, name, size = 44 }: { pk: string; name?: string; siz
         {initials}
       </Text>
     </View>
-  );
-}
-
-export function PressableScale(props: PressableProps & { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  const { style, children, ...rest } = props;
-  return (
-    <Pressable {...rest} style={({ pressed }) => [style, { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }]}>
-      {children}
-    </Pressable>
   );
 }
 

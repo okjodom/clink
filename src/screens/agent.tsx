@@ -68,7 +68,7 @@ export function DeskScreen() {
     <Screen large title="Agent desk" right={<IconButton name="share-2" onPress={() => setShare(true)} />}>
       <View style={{ backgroundColor: c.hero, borderRadius: radius.xl, padding: space.xl, gap: space.lg }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-          {online ? <Pulse color="#57c26a" /> : <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.heroMuted }} /></View>}
+          {online ? <Pulse color={c.positive} /> : <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.heroMuted }} /></View>}
           <View style={{ flex: 1 }}>
             <Text variant="heading" color={c.heroText}>
               {online ? "You're online" : "You're offline"}
@@ -95,7 +95,7 @@ export function DeskScreen() {
       {completed.length > 0 && (
         <Card style={{ flexDirection: "row", alignItems: "center" }}>
           <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: c.primarySoft }}>
-            <Feather name="trending-up" size={18} color={c.primary} />
+            <Feather name="trending-up" size={18} color={c.primaryInk} />
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text variant="label">

@@ -16,10 +16,10 @@ do not hand-edit versions, tags, release notes or changelog entries.
    GitHub. Losing it means users can't install updates over their current app.
 
    ```sh
-   keytool -genkeypair -v -keystore pontspark-upload.keystore \
-     -alias pontspark -keyalg RSA -keysize 4096 -validity 10000 \
-     -dname "CN=Pontspark, O=Pontmore"
-   base64 -w0 pontspark-upload.keystore > pontspark-upload.keystore.b64
+   keytool -genkeypair -v -keystore clink-upload.keystore \
+     -alias clink -keyalg RSA -keysize 4096 -validity 10000 \
+     -dname "CN=Clink, O=Pontmore"
+   base64 -w0 clink-upload.keystore > clink-upload.keystore.b64
    ```
 
 4. Add these Actions secrets:
@@ -27,12 +27,12 @@ do not hand-edit versions, tags, release notes or changelog entries.
    | Secret | Value |
    | --- | --- |
    | `BREEZ_API_KEY` | Breez SDK API key compiled into the app |
-   | `PONTSPARK_KEYSTORE_BASE64` | contents of `pontspark-upload.keystore.b64` |
-   | `PONTSPARK_STORE_PASSWORD` | keystore password |
+   | `CLINK_KEYSTORE_BASE64` | contents of `clink-upload.keystore.b64` |
+   | `CLINK_STORE_PASSWORD` | keystore password |
 
-   The key alias must be `pontspark`. keytool creates PKCS12 keystores,
+   The key alias must be `clink`. keytool creates PKCS12 keystores,
    whose key password is the store password, so there is no separate secret
-   for it. Delete `pontspark-upload.keystore.b64` once the secret is set.
+   for it. Delete `clink-upload.keystore.b64` once the secret is set.
 
    The release job refuses to build if any of them is missing, and refuses to
    publish a debug-signed APK.
@@ -59,7 +59,7 @@ Review that pull request as the declaration of the release.
 CI builds the release APK on every release pull request, the same way the
 release will: production config, signed with the upload key. Merge only when
 the `android / build` check passes. Its run's summary page offers the APK as
-`pontspark-vX.Y.Z-<sha>.apk`, kept for 14 days, so you can install and try
+`clink-vX.Y.Z-<sha>.apk`, kept for 14 days, so you can install and try
 the release before publishing it.
 
 To build any other branch, run the **Android** workflow from the Actions tab
@@ -74,19 +74,19 @@ head (the usual case: Release Please keeps its branch up to date with `main`),
 the `reuse` job ships the APK CI built for that pull request instead of
 building again. It finds the build artifact by git tree hash. Before attaching
 it, the job checks that the APK is signed only by the upload key, has app id
-`xyz.pontmore.pontspark`, and has the release's version. Artifacts are kept for
+`com.clink.me`, and has the release's version. Artifacts are kept for
 14 days, so a release pull request merged later than that is rebuilt.
 
 Otherwise the `android` job checks out the tagged commit and:
 
 1. installs locked dependencies, type-checks and runs the tests;
 2. generates the native project with `EXPO_PUBLIC_APP_ENV=production`
-   (app id `xyz.pontmore.pontspark`, mainnet);
+   (app id `com.clink.me`, mainnet);
 3. checks that the upload key opens with the store password and alias
-   `pontspark`;
+   `clink`;
 4. builds `assembleRelease` for `arm64-v8a` and `armeabi-v7a`, signed with the
    upload key;
-5. verifies the signature and attaches `pontspark-vX.Y.Z.apk` and its
+5. verifies the signature and attaches `clink-vX.Y.Z.apk` and its
    `.sha256` to the release.
 
 The Android `versionCode` comes from the version (`1.2.3` → `1002003`), so each
@@ -103,12 +103,12 @@ next patch release.
 ```sh
 EXPO_PUBLIC_APP_ENV=production npx expo prebuild --platform android --clean
 cd android
-ORG_GRADLE_PROJECT_PONTSPARK_UPLOAD_STORE_FILE=/path/to/pontspark-upload.keystore \
-ORG_GRADLE_PROJECT_PONTSPARK_UPLOAD_STORE_PASSWORD=... \
+ORG_GRADLE_PROJECT_CLINK_UPLOAD_STORE_FILE=/path/to/clink-upload.keystore \
+ORG_GRADLE_PROJECT_CLINK_UPLOAD_STORE_PASSWORD=... \
   ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
 ```
 
-Without the `PONTSPARK_UPLOAD_*` properties the release build falls back to
+Without the `CLINK_UPLOAD_*` properties the release build falls back to
 the debug key, which is fine for testing but must never be published.
 Re-run `npx expo prebuild --clean` without `EXPO_PUBLIC_APP_ENV` afterwards to
 return to the development app id.

@@ -1,9 +1,12 @@
 node_modules/
 .expo/
 dist/
-android/
-ios/
+/android/
+/ios/
 *.keystore
 *.keystore.b64
 .env
 .env.local
+
+# Gradle output from local native modules
+modules/*/android/build/

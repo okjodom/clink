@@ -9,8 +9,8 @@ import * as wallet from "../services/wallet";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
 import { AmountDisplay, AmountPad, useAmountInput } from "../ui/amount";
-import { Button, Card, Field, Screen, Spinner, Text, success } from "../ui/components";
-import { CopyField, QR, Sheet, toastError } from "../ui/extras";
+import { Button, Card, Divider, Field, Row, Screen, Spinner, Text, success } from "../ui/components";
+import { CopyButton, CopyField, QR, Sheet, toastError } from "../ui/extras";
 import { space, useColors } from "../ui/theme";
 
 /**
@@ -79,9 +79,12 @@ export function ReceiveScreen() {
             </>
           ) : address ? (
             <>
-              <Text variant="heading" center selectable>
-                {address}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+                <Text variant="heading" center selectable style={{ flexShrink: 1 }}>
+                  {address}
+                </Text>
+                <CopyButton value={address} label="Copy your username" />
+              </View>
               <Text variant="caption" muted center>
                 Anyone can pay you here, any time
               </Text>
@@ -110,7 +113,6 @@ export function ReceiveScreen() {
       </View>
 
       {useInvoice && invoice && <CopyField value={invoice} short label="Payment request" />}
-      {!useInvoice && address && <CopyField value={address} label="Your username" />}
 
       {!address && (
         <Card tone="alt">
@@ -143,29 +145,53 @@ export function ReceiveScreen() {
         />
       </Sheet>
       <ClaimAddressSheet visible={claimOpen} onClose={() => setClaimOpen(false)} />
-      <OnchainSheet visible={moreOpen} onClose={() => setMoreOpen(false)} />
+      <MoreWaysSheet
+        visible={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        onStablecoin={() => {
+          setMoreOpen(false);
+          nav.navigate("ReceiveStablecoin");
+        }}
+      />
     </Screen>
   );
 }
 
-/** A plain bitcoin address, for exchanges and wallets that only send on-chain. */
-function OnchainSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+/**
+ * The less common ways in, one tap each: USDT/USDC from another chain, or a
+ * plain bitcoin address for exchanges that only send on-chain.
+ */
+function MoreWaysSheet({ visible, onClose, onStablecoin }: { visible: boolean; onClose: () => void; onStablecoin: () => void }) {
+  const [onchain, setOnchain] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
   useEffect(() => {
-    if (visible && !address) wallet.bitcoinAddress().then(setAddress).catch(toastError);
-  }, [visible, address]);
+    if (onchain && !address) wallet.bitcoinAddress().then(setAddress).catch(toastError);
+  }, [onchain, address]);
+  useEffect(() => {
+    if (!visible) setOnchain(false);
+  }, [visible]);
   return (
-    <Sheet visible={visible} onClose={onClose} title="Bitcoin address">
-      <Text variant="caption" muted>
-        For exchanges and wallets that can only send on-chain. It takes a few confirmations to arrive and carries a network fee.
-      </Text>
-      {address ? (
+    <Sheet visible={visible} onClose={onClose} title={onchain ? "Bitcoin address" : "More ways to receive"}>
+      {onchain ? (
         <>
-          <QR value={`bitcoin:${address}`} size={180} />
-          <CopyField value={address} short />
+          <Text variant="caption" muted>
+            For exchanges and wallets that can only send on-chain. It takes a few confirmations to arrive and carries a network fee.
+          </Text>
+          {address ? (
+            <>
+              <QR value={`bitcoin:${address}`} size={180} />
+              <CopyField value={address} short />
+            </>
+          ) : (
+            <Spinner />
+          )}
         </>
       ) : (
-        <Spinner />
+        <Card style={{ paddingVertical: space.sm, gap: 0 }}>
+          <Row icon="dollar-sign" title="USDT or USDC" subtitle="From Tron, Ethereum, Solana, Base and more" chevron onPress={onStablecoin} />
+          <Divider />
+          <Row icon="link" title="Bitcoin address" subtitle="For exchanges that only send on-chain" chevron onPress={() => setOnchain(true)} />
+        </Card>
       )}
     </Sheet>
   );

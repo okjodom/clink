@@ -60,9 +60,9 @@ export async function publishAll(events: Event[]): Promise<void> {
   await Promise.all(events.map(publish));
 }
 
-export async function query(filter: Filter, maxWait = 5000): Promise<Event[]> {
-  if (!relays.length) return [];
-  return p().querySync(relays, filter, { maxWait });
+export async function query(filter: Filter, maxWait = 5000, urls: string[] = relays): Promise<Event[]> {
+  if (!urls.length) return [];
+  return p().querySync([...new Set(urls)], filter, { maxWait });
 }
 
 /** Latest replaceable/addressable event per (pubkey, d) from a result set. */

@@ -53,7 +53,7 @@ jobs:
           REPO_ID: ${{ github.repository_id }}
         run: |
           tree=$(git rev-parse 'HEAD^{tree}')
-          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=pontspark-apk-$tree&per_page=20" --jq "
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=clink-apk-$tree&per_page=20" --jq "
             [.artifacts[] | select((.expired | not) and .workflow_run.head_repository_id == $REPO_ID)]
             | sort_by(.created_at) | last | .workflow_run.id // empty")
           echo "tree=$tree" >> "$GITHUB_OUTPUT"
@@ -71,22 +71,22 @@ jobs:
           RUN_ID: ${{ steps.find.outputs.run_id }}
           TREE: ${{ steps.find.outputs.tree }}
         run: |
-          gh run download "$RUN_ID" --name "pontspark-apk-$TREE" --dir "$RUNNER_TEMP/prebuilt"
+          gh run download "$RUN_ID" --name "clink-apk-$TREE" --dir "$RUNNER_TEMP/prebuilt"
           cd "$RUNNER_TEMP/prebuilt"
           sha256sum --check *.sha256
 
       - name: Verify the APK is ours and matches the release
         if: ${{ steps.find.outputs.run_id != '' }}
         env:
-          KEYSTORE: ${{ secrets.PONTSPARK_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.PONTSPARK_STORE_PASSWORD }}
+          KEYSTORE: ${{ secrets.CLINK_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.CLINK_STORE_PASSWORD }}
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           apk=$(ls "$RUNNER_TEMP"/prebuilt/*.apk)
           tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
 
           echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.keystore"
-          expected=$(keytool -exportcert -keystore "$RUNNER_TEMP/upload.keystore" -storepass:env STORE_PASSWORD -alias pontspark | sha256sum | cut -d' ' -f1)
+          expected=$(keytool -exportcert -keystore "$RUNNER_TEMP/upload.keystore" -storepass:env STORE_PASSWORD -alias clink | sha256sum | cut -d' ' -f1)
           rm -f "$RUNNER_TEMP/upload.keystore"
 
           "$tools/apksigner" verify --print-certs "$apk" > signature.txt
@@ -99,7 +99,7 @@ jobs:
           fi
 
           "$tools/aapt2" dump badging "$apk" | head -1 | tee badging.txt
-          grep -q "name='xyz.pontmore.simple'" badging.txt || { echo "::error::Wrong application id"; exit 1; }
+          grep -q "name='com.clink.me'" badging.txt || { echo "::error::Wrong application id"; exit 1; }
           grep -q "versionName='$VERSION'" badging.txt || { echo "::error::APK is not version $VERSION"; exit 1; }
 
       - name: Attach the APK to the release
@@ -108,7 +108,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release.outputs.tag_name }}
         run: |
-          apk="pontspark-$TAG.apk"
+          apk="clink-$TAG.apk"
           cp "$RUNNER_TEMP"/prebuilt/*.apk "$apk"
           sha256sum "$apk" > "$apk.sha256"
           gh release upload "$TAG" "$apk" "$apk.sha256" --clobber

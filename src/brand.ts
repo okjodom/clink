@@ -1,9 +1,12 @@
 /**
- * Everything user-facing that names the product. The rebrand changes this
- * file (plus app.config.js and the icons), not the screens.
+ * Everything user-facing that names the product. A rename changes this file
+ * (plus app.config.js and scripts/brand-assets.mjs), not the screens.
+ *
+ * Clink: the sound of a coin dropping into a jar, and of two glasses
+ * touching. The app plays it when money lands.
  */
 export const BRAND = {
-  name: "Pontspark",
-  tagline: "Money that moves like a message.",
-  pitch: "Send, receive and cash out to M-Pesa in seconds.",
+  name: "Clink",
+  tagline: "Money that just works.",
+  pitch: "Add money, send it and cash it out with people near you.",
 } as const;

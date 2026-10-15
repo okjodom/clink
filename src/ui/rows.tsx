@@ -3,6 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import React from "react";
 import { View } from "react-native";
 
+import { formatUsd } from "../lib/stablecoins";
 import { useMe, useMoney } from "../hooks";
 import type { SwapItem } from "../hooks";
 import { describeSwap, STEPS, timeAgo } from "../lib/swapView";
@@ -77,7 +78,7 @@ export function Steps({ step, tone }: { step: number; tone: "danger" | string })
   );
 }
 
-/** Swap escrow payments carry "Pontspark swap <id prefix>" (or the older "Pontmore swap"). */
+/** Swap escrow payments carry "Pontmore swap <id prefix>"; other and older clients put their app name first. */
 function useSwapOf(tx: WalletTx): { label: string; id?: string } | null {
   const prefix = tx.description?.match(/^Pont(?:spark|more) swap ([0-9a-f]{8})$/)?.[1];
   const rec = useSwaps((s) => (prefix ? Object.values(s.records).find((r) => r.id.startsWith(prefix)) : undefined));
@@ -119,18 +120,18 @@ export function TxRow({ tx, hidden }: { tx: WalletTx; hidden?: boolean }) {
     <Row
       onPress={swap?.id ? () => nav.navigate("SwapDetail", { id: swap.id }) : undefined}
       icon={icon}
-      iconBg={incoming ? c.primarySoft : c.surfaceAlt}
-      iconColor={incoming ? c.primary : c.text}
+      iconBg={incoming ? c.positiveSoft : c.surfaceAlt}
+      iconColor={incoming ? c.positive : c.text}
       title={label}
       subtitle={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}${tx.status === "pending" ? " · pending" : tx.status === "failed" ? " · failed" : ""}${!incoming && tx.feeSats > 0n ? ` · fee ${money.primary(tx.feeSats)}` : ""}`}
       right={
         <View style={{ alignItems: "flex-end" }}>
-          <Text variant="label" color={incoming ? c.primary : c.text}>
+          <Text variant="label" color={incoming ? c.positive : c.text}>
             {hidden ? "••••" : `${incoming ? "+" : "−"}${money.primary(tx.amountSats)}`}
           </Text>
-          {!hidden && money.secondary(tx.amountSats) && (
+          {!hidden && (tx.usd !== undefined || money.secondary(tx.amountSats)) && (
             <Text variant="caption" faint>
-              {money.secondary(tx.amountSats)}
+              {tx.usd !== undefined ? formatUsd(tx.usd) : money.secondary(tx.amountSats)}
             </Text>
           )}
         </View>

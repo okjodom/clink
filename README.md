@@ -1,35 +1,37 @@
 <p align="center">
-  <img src="docs/hero.png" alt="Pontspark: bitcoin to M-Pesa and back, with people near you" width="100%" />
+  <img src="docs/hero.png" alt="Clink: money that just works" width="100%" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/pontmore/protocol"><img alt="Pontmore protocol" src="https://img.shields.io/badge/protocol-pontmore%2Fswap%401-2f9e44"></a>
-  <img alt="Escrow" src="https://img.shields.io/badge/escrow-Spark%20HTLC-f08c00">
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Android%20%7C%20iOS-0c140f">
-  <img alt="Status" src="https://img.shields.io/badge/status-experimental-ffb24d">
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-57c26a"></a>
+  <a href="https://github.com/pontmore/protocol"><img alt="Pontmore protocol" src="https://img.shields.io/badge/protocol-pontmore%2Fswap%401-177a4a"></a>
+  <img alt="Escrow" src="https://img.shields.io/badge/escrow-Spark%20HTLC-ffb020">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Android%20%7C%20iOS-14110f">
+  <img alt="Status" src="https://img.shields.io/badge/status-experimental-b83c27">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-177a4a"></a>
 </p>
 
-# Pontspark
+# Clink
 
-**Money that moves like a message.** Download it, pick a name, and you can get paid, pay anyone, and add money or cash out to M-Pesa, mobile money or cash through people near you.
+**Money that just works.** Download it, pick a name, and you can get paid, pay anyone, and add money or cash out to mobile money, bank or cash through people near you. When money lands, your phone goes *clink*.
 
 Under the hood it's a bitcoin wallet only you hold, with no bank, account or server in the middle. That part is there for anyone who goes looking (Me → *Your keys, your money*), not something you need to understand to use it.
 
-Pontspark is a mobile client for the [Pontmore protocol](https://github.com/pontmore/protocol). Every swap is coordinated in public, signed Nostr events, and the bitcoin is locked in a Spark HTLC between the two people trading. Nobody else ever holds it. There is no Pontspark server, no account and no sign-up: the app talks to Nostr relays and to your own [Breez](https://breez.technology) Spark wallet, and nothing else.
+Clink is a mobile client for the [Pontmore protocol](https://github.com/pontmore/protocol). Every swap is coordinated in public, signed Nostr events, and the bitcoin is locked in a Spark HTLC between the two people trading. Nobody else ever holds it. There is no Clink server, no account and no sign-up: the app talks to Nostr relays and to your own [Breez](https://breez.technology) Spark wallet, and nothing else.
 
 > [!WARNING]
-> Pontspark is experimental software that moves real bitcoin on mainnet. The protocol profile it implements is itself experimental. Use small amounts, back up your recovery phrase, and expect breaking changes.
+> Clink is experimental software that moves real bitcoin on mainnet. The protocol profile it implements is itself experimental. Use small amounts, back up your recovery phrase, and expect breaking changes.
 
-## Why Pontspark
+## Why Clink
 
 - **Your keys, your phone.** One 12-word phrase backs your wallet, your Nostr identity and, if you run a desk, your agent keys. Keys never leave the device.
 - **Bitcoin is locked before anyone sends money.** The seller locks sats to the buyer under a hash, the buyer checks the lock in their own wallet, and only then pays. The sats release when the payment arrives, or return to the seller when the lock expires.
 - **Anyone can be an agent.** Flip to agent mode, choose your currencies, payment channels and margin, and go online. Requests that fit your offer are accepted automatically.
-- **Open by default.** Offers are [NIP-69](https://github.com/nostr-protocol/nips/blob/master/69.md) orders, so peer-to-peer aggregators can list Pontspark agents next to Mostro, RoboSats and Peach. Swap state is PIP-02 event chains that any Pontmore client can verify.
+- **Open by default.** Offers are [NIP-69](https://github.com/nostr-protocol/nips/blob/master/69.md) orders, so peer-to-peer aggregators can list Clink agents next to Mostro, RoboSats and Peach. Swap state is PIP-02 event chains that any Pontmore client can verify.
 - **Payment channels from a shared registry.** Fields, validation and masking for M-Pesa, Airtel Money, PesaLink, PayShap, cash and more come from [`@minmoto/payment-channels`](https://github.com/minmoto/payment-channels), not from a list baked into the app.
 
 ## Screens
+
+> These screenshots were taken before the Clink rebrand; the layout is the same, the colours and logo are not.
 
 ### Personal mode: hold, send, receive and swap
 
@@ -111,7 +113,7 @@ Preimages are derived (`HMAC(identity key, root id)`) and HTLC sends use a deriv
 
 ## Currencies and payment channels
 
-Currencies and channels come from the open [`@minmoto/payment-channels`](https://github.com/minmoto/payment-channels) registry. Pontspark allows mobile money, bank and cash channels; card channels are excluded because card payments can be charged back after the bitcoin is released.
+Currencies and channels come from the open [`@minmoto/payment-channels`](https://github.com/minmoto/payment-channels) registry. Clink allows mobile money, bank and cash channels; card channels are excluded because card payments can be charged back after the bitcoin is released.
 
 | Currency | Channels today |
 | --- | --- |
@@ -187,7 +189,7 @@ src/ui/         theme, components, schema-driven payment channel fields
 ## Known limits
 
 - **Agents must keep the app open while online.** Without a server there are no push notifications. Offers expire on their own after 30 minutes, so a closed app drops out of discovery.
-- **Both sides of a swap use Spark wallets**, which the app provides. Other Pontmore clients need the same `spark_htlc` escrow assumption to trade with Pontspark.
+- **Both sides of a swap use Spark wallets**, which the app provides. Other Pontmore clients need the same `spark_htlc` escrow assumption to trade with Clink.
 - **Disputes rely on the agent's resolver.** There is no neutral arbitrator.
 - **Reputation is a raw count** of `core/settle` events signed by the agent's escrow key.
 - **Regulation is your responsibility.** Running a swap desk may need a licence where you operate (for example under Kenya's VASP Act).
@@ -198,6 +200,10 @@ src/ui/         theme, components, schema-driven payment channel fields
 - [pontmore/pontmore](https://github.com/pontmore/pontmore): Rust reference implementation and `pontmored` operator daemon
 - [minmoto/payment-channels](https://github.com/minmoto/payment-channels): open registry of fiat payment channel schemas
 - [Breez SDK (Spark)](https://sdk-doc-spark.breez.technology/): the wallet underneath
+
+## Brand
+
+Name, logo, colours, sound and voice are in [docs/brand.md](docs/brand.md). Every icon, splash and logo file is generated from one set of shapes by `node scripts/brand-assets.mjs`; the clink sound by `python3 scripts/clink-sound.py`.
 
 ## License
 

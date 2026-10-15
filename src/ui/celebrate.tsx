@@ -1,8 +1,9 @@
 /**
- * The moment a swap completes. Two coins, bitcoin and the local currency,
- * slide in from either side and meet in the middle (the swap), fuse into a
- * check, and throw off a ring of sparks (Pontspark). Plays once, with a
- * success haptic; people who turned animations off see the end state.
+ * The Clink moment, when money lands. Two coins, bitcoin and the local
+ * currency, slide in and touch; on contact the phone clinks (sound and
+ * haptic) and a spark pops where they meet, so the logo builds itself.
+ * Plays once; people who turned animations off see the end state and still
+ * hear the clink.
  */
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
@@ -10,11 +11,15 @@ import { AccessibilityInfo, Animated, Easing, Modal, Pressable, Share, View } fr
 import { create } from "zustand";
 
 import { BRAND } from "../brand";
-import { Text, success } from "./components";
-import { useColors } from "./theme";
+import { Spark, Text, Wordmark, success } from "./components";
+import { clink } from "./sound";
+import { useColors, useIsDark } from "./theme";
 
-const SPARKS = 14;
+const SPARKS = 12;
+const COIN = 72;
 const SIZE = 132;
+/** How long the coins take to meet; the clink plays on contact. */
+const MEET_MS = 480;
 
 export function SwapCelebration({
   fiatCode,
@@ -27,74 +32,92 @@ export function SwapCelebration({
   amountLabel: string;
   caption?: string;
   play: boolean;
-  /** Drawn on the full-screen green takeover rather than the page. */
+  /** Drawn on the full-screen gold takeover rather than the page. */
   onBrand?: boolean;
 }) {
   const c = useColors();
-  const ink = onBrand ? "#ffffff" : c.primary;
+  // On gold the ink carries everything; on the page the coins stay ink and the text follows the theme.
+  const ink = onBrand ? c.primaryText : c.text;
+  const coinInk = "#14110f";
+  // Ink coins vanish on a dark page, so there they flip to gold with ink detail.
+  const dark = useIsDark();
+  const flip = !onBrand && dark;
+  const coinFill = flip ? c.primary : coinInk;
+  const coinDetail = flip ? coinInk : c.primary;
+  const gold = c.primary;
+  const halo = onBrand ? c.primary : c.bg;
   const meet = useRef(new Animated.Value(play ? 0 : 1)).current;
   const pop = useRef(new Animated.Value(play ? 0 : 1)).current;
   const burst = useRef(new Animated.Value(play ? 0 : 1)).current;
   const [sparks] = useState(() =>
     Array.from({ length: SPARKS }, (_, i) => ({
       angle: (i / SPARKS) * Math.PI * 2 + (i % 2 ? 0.12 : -0.08),
-      reach: 70 + ((i * 37) % 30),
+      reach: 64 + ((i * 37) % 30),
       size: 5 + (i % 3) * 2,
-      warm: i % 3 === 0,
+      light: i % 3 === 0,
     })),
   );
 
   useEffect(() => {
     if (!play) return;
     let alive = true;
+    const contact = () => {
+      clink();
+      success();
+    };
     void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
       if (!alive) return;
       if (reduce) {
         meet.setValue(1);
         pop.setValue(1);
         burst.setValue(1);
-        success();
+        contact();
         return;
       }
       meet.setValue(0);
       pop.setValue(0);
       burst.setValue(0);
       Animated.sequence([
-        Animated.timing(meet, { toValue: 1, duration: 520, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(meet, { toValue: 1, duration: MEET_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
         Animated.parallel([
-          Animated.spring(pop, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true }),
+          Animated.spring(pop, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }),
           Animated.timing(burst, { toValue: 1, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: true }),
         ]),
       ]).start();
-      setTimeout(() => alive && success(), 520);
+      setTimeout(() => alive && contact(), MEET_MS);
     });
     return () => {
       alive = false;
     };
   }, [play, meet, pop, burst]);
 
-  const coin = (side: -1 | 1, label: string, bg: string, fg: string) => (
+  // Coins end edge to edge on a slight tilt, like the logo: left low, right high.
+  const coin = (side: -1 | 1, label: string) => (
     <Animated.View
       style={{
         position: "absolute",
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: bg,
+        width: COIN,
+        height: COIN,
+        borderRadius: COIN / 2,
+        backgroundColor: coinFill,
         alignItems: "center",
         justifyContent: "center",
-        opacity: meet.interpolate({ inputRange: [0, 0.85, 1], outputRange: [1, 1, 0] }),
-        transform: [{ translateX: meet.interpolate({ inputRange: [0, 1], outputRange: [side * 92, side * 6] }) }, { rotate: meet.interpolate({ inputRange: [0, 1], outputRange: [`${side * -30}deg`, "0deg"] }) }],
+        transform: [
+          { translateX: meet.interpolate({ inputRange: [0, 1], outputRange: [side * 110, side * (COIN / 2) * 0.93] }) },
+          { translateY: meet.interpolate({ inputRange: [0, 1], outputRange: [0, -side * (COIN / 2) * 0.37] }) },
+          { rotate: meet.interpolate({ inputRange: [0, 1], outputRange: [`${side * -40}deg`, "0deg"] }) },
+        ],
       }}
     >
-      <Text variant="label" color={fg}>
+      <View style={{ position: "absolute", width: COIN * 0.72, height: COIN * 0.72, borderRadius: COIN, borderWidth: 3, borderColor: coinDetail }} />
+      <Text variant="label" color={coinDetail}>
         {label}
       </Text>
     </Animated.View>
   );
 
   return (
-    <View style={{ alignItems: "center", gap: 10, paddingVertical: 8 }} accessibilityLabel={`Swap complete. ${amountLabel}`}>
+    <View style={{ alignItems: "center", gap: 10, paddingVertical: 8 }} accessible accessibilityLabel={`Clink! ${amountLabel}${caption ? `. ${caption}` : ""}`}>
       <View style={{ width: SIZE * 2, height: SIZE + 24, alignItems: "center", justifyContent: "center" }}>
         {sparks.map((s, i) => (
           <Animated.View
@@ -104,7 +127,7 @@ export function SwapCelebration({
               width: s.size,
               height: s.size,
               borderRadius: s.size,
-              backgroundColor: s.warm ? c.accent : ink,
+              backgroundColor: s.light ? (onBrand ? "#fbf6ec" : gold) : coinInk,
               opacity: burst.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 1, 0] }),
               transform: [
                 { translateX: burst.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(s.angle) * s.reach] }) },
@@ -114,37 +137,36 @@ export function SwapCelebration({
             }}
           />
         ))}
-        {coin(-1, "₿", "#f7931a", "#ffffff")}
-        {coin(1, fiatCode, onBrand ? "#ffffff" : c.primary, onBrand ? c.primary : "#ffffff")}
+        {coin(-1, "\u20bf")}
+        {coin(1, fiatCode)}
         <Animated.View
           style={{
-            width: 88,
-            height: 88,
-            borderRadius: 44,
-            backgroundColor: ink,
+            position: "absolute",
             alignItems: "center",
             justifyContent: "center",
             opacity: pop,
-            transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) }],
+            transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }) }, { rotate: pop.interpolate({ inputRange: [0, 1], outputRange: ["-45deg", "0deg"] }) }],
           }}
         >
-          <Feather name="check" size={44} color={onBrand ? c.primary : "#ffffff"} />
+          <Spark size={52} color={halo} />
+          <View style={{ position: "absolute" }}>
+            <Spark size={40} color={onBrand ? "#fbf6ec" : gold} />
+          </View>
         </Animated.View>
       </View>
       <Animated.View style={{ alignItems: "center", gap: 2, opacity: pop, transform: [{ translateY: pop.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
-        <Text variant={onBrand ? "hero" : "title"} color={ink}>
+        {onBrand && (
+          <Text variant="hero" color={ink} style={{ fontSize: 64, letterSpacing: -2 }}>
+            Clink!
+          </Text>
+        )}
+        <Text variant={onBrand ? "display" : "title"} color={ink}>
           {amountLabel}
         </Text>
         {caption ? (
-          onBrand ? (
-            <Text variant="body" color="#ffffff" center>
-              {caption}
-            </Text>
-          ) : (
-            <Text variant="caption" muted center>
-              {caption}
-            </Text>
-          )
+          <Text variant={onBrand ? "body" : "caption"} color={onBrand ? ink : undefined} muted={!onBrand} center>
+            {caption}
+          </Text>
         ) : null}
       </Animated.View>
     </View>
@@ -187,7 +209,7 @@ export function CelebrationHost() {
     <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={close}>
       <Animated.View style={{ flex: 1, opacity: fade, backgroundColor: c.primary }}>
         <Pressable onPress={close} style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 12 }} accessibilityRole="button" accessibilityLabel="Close">
-          <Text variant="label" color="#ffffff" style={{ opacity: 0.85, letterSpacing: 1 }}>
+          <Text variant="label" color={c.primaryText} style={{ opacity: 0.75, letterSpacing: 1 }}>
             {current.label ?? "SWAP COMPLETE"}
           </Text>
           <SwapCelebration play onBrand fiatCode={current.fiatCode} amountLabel={current.amountLabel} caption={current.caption} />
@@ -195,17 +217,17 @@ export function CelebrationHost() {
         {current.share ? (
           <Pressable
             onPress={() => void Share.share({ message: current.share! })}
-            style={{ alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.18)", marginBottom: 16 }}
+            style={{ alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999, backgroundColor: "rgba(20,17,15,0.12)", marginBottom: 16 }}
           >
-            <Feather name="share" size={16} color="#ffffff" />
-            <Text variant="label" color="#ffffff">
+            <Feather name="share" size={16} color={c.primaryText} />
+            <Text variant="label" color={c.primaryText}>
               Tell a friend
             </Text>
           </Pressable>
         ) : null}
-        <Text variant="caption" color="#ffffff" center style={{ opacity: 0.7, paddingBottom: 48 }}>
-          {BRAND.name}
-        </Text>
+        <View style={{ alignItems: "center", paddingBottom: 48, opacity: 0.85 }} accessibilityLabel={BRAND.name}>
+          <Wordmark height={22} color={c.primaryText} dot={c.primaryText} />
+        </View>
       </Animated.View>
     </Modal>
   );

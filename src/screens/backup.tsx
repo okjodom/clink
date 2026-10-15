@@ -14,7 +14,7 @@ async function authenticate(): Promise<boolean> {
   const has = await LocalAuthentication.hasHardwareAsync().catch(() => false);
   const enrolled = has && (await LocalAuthentication.isEnrolledAsync().catch(() => false));
   if (!enrolled) return true; // no lock set up; nothing to check against
-  const res = await LocalAuthentication.authenticateAsync({ promptMessage: "Show recovery phrase" });
+  const res = await LocalAuthentication.authenticateAsync({ promptMessage: "Show your recovery words" });
   return res.success;
 }
 
@@ -61,26 +61,26 @@ export function BackupScreen() {
 
   if (stage === "intro") {
     return (
-      <Screen back title="Back up" footer={<Button title="Show my recovery phrase" icon="eye" onPress={reveal} />}>
-        <Text variant="title">Your recovery phrase is your wallet</Text>
+      <Screen back title="Back up" footer={<Button title="Show my words" icon="eye" onPress={reveal} />}>
+        <Text variant="title">These 12 words are your wallet</Text>
         <Text muted>
-          {`12 words that bring back your money, your username and your agent setup on any phone. ${BRAND.name} can't recover them for you, because ${BRAND.name} never has them.`}
+          {`Lose your phone, and these words bring back your money and your name. Only you have them. Not even ${BRAND.name} can get them back for you.`}
         </Text>
         <Card tone="alt" style={{ gap: space.md }}>
           {[
-            "Write the words on paper, in order.",
-            "Keep the paper somewhere safe and private.",
-            "Never share them. Anyone with these words can take your money.",
+            "Write them on paper, in order.",
+            "Keep the paper somewhere safe.",
+            "Never share them. Anyone with them can take your money.",
           ].map((t, i) => (
             <View key={i} style={{ flexDirection: "row", gap: space.md }}>
-              <Text variant="label" color={c.primary}>
+              <Text variant="label" color={c.primaryInk}>
                 {i + 1}
               </Text>
               <Text style={{ flex: 1 }}>{t}</Text>
             </View>
           ))}
         </Card>
-        {backedUp && <Notice tone="success" title="Already backed up">You can view the words again any time.</Notice>}
+        {backedUp && <Notice tone="success" title="Already backed up">You can see your words again any time.</Notice>}
       </Screen>
     );
   }
@@ -89,8 +89,8 @@ export function BackupScreen() {
     return (
       <Screen
         back
-        title="Recovery phrase"
-        footer={<Button title={backedUp ? "Done" : "I've written them down"} onPress={() => (backedUp ? nav.goBack() : setStage("verify"))} />}
+        title="Your 12 words"
+        footer={<Button title={backedUp ? "Done" : "I wrote them down"} onPress={() => (backedUp ? nav.goBack() : setStage("verify"))} />}
       >
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
           {words.map((w, i) => (
@@ -102,7 +102,7 @@ export function BackupScreen() {
             </View>
           ))}
         </View>
-        <Notice tone="warning">Don't screenshot this. Screenshots often sync to the cloud.</Notice>
+        <Notice tone="warning">Don't take a screenshot. Screenshots often get copied to the cloud.</Notice>
       </Screen>
     );
   }
@@ -114,19 +114,19 @@ export function BackupScreen() {
       title="Check"
       footer={
         <Button
-          title="Confirm backup"
+          title="Done"
           disabled={!allRight}
           onPress={() => {
             markBackedUp();
             success();
-            toast("Wallet backed up", "success");
+            toast("Your wallet is backed up", "success");
             nav.goBack();
           }}
         />
       }
     >
-      <Text variant="title">Let's make sure</Text>
-      <Text muted>Pick the right word for each position.</Text>
+      <Text variant="title">Check your words</Text>
+      <Text muted>Tap the right word for each number.</Text>
       {checks.map((i) => (
         <View key={i} style={{ gap: space.sm }}>
           <Text variant="label">Word #{i + 1}</Text>

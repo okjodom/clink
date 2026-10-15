@@ -1,6 +1,6 @@
 /**
  * DEV ONLY: drive wallet primitives from adb to probe escrow options, e.g.
- *   adb shell am start -a android.intent.action.VIEW -d "pontmore://devprobe/hodl?amount=20" xyz.pontmore.simple.dev
+ *   adb shell am start -a android.intent.action.VIEW -d "pontmore://devprobe/hodl?amount=20" com.dev.clink.me
  * Results are logged to Metro as "[probe] ...".
  */
 import * as Linking from "expo-linking";
@@ -25,7 +25,7 @@ async function run(url: string) {
       case "hodl": {
         const res = await s.receivePayment({
           paymentMethod: new ReceivePaymentMethod.Bolt11Invoice({
-            description: "pontspark escrow probe",
+            description: "clink escrow probe",
             amountSats: BigInt(q("amount") || "20"),
             expirySecs: 3600,
             paymentHash: q("hash") || HASH,

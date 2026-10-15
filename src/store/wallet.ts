@@ -8,7 +8,12 @@ import type { WalletTx } from "../services/wallet";
 interface WalletState {
   status: "idle" | "connecting" | "ready" | "error";
   error?: string;
+  /** Everything the wallet holds, in sats: bitcoin plus dollars at today's price. */
   balance: number | null;
+  /** The parts: bitcoin, and dollars held as USDB. */
+  sats: number | null;
+  usd: number;
+  holdIn: wallet.HoldIn;
   txs: WalletTx[];
   rates: Record<string, number>;
   lightningAddress: string | null;
@@ -18,7 +23,20 @@ interface WalletState {
   refresh(): Promise<void>;
   refreshRates(): Promise<void>;
   setLightningAddress(a: string | null, lnurl?: string | null): void;
+  /** Keep the money in dollars or in bitcoin; converts what's there now. */
+  setHoldIn(to: wallet.HoldIn): Promise<void>;
   reset(): void;
+}
+
+/** Dollars count at today's price, so one balance covers both. */
+function valued(b: wallet.Balances, txs: WalletTx[], usdPerBtc: number | undefined) {
+  const asSats = (usd: number) => (usdPerBtc ? Math.round((usd / usdPerBtc) * 1e8) : 0);
+  return {
+    sats: Number(b.sats),
+    usd: b.usd,
+    balance: Number(b.sats) + asSats(b.usd),
+    txs: txs.map((t) => (t.usd === undefined ? t : { ...t, amountSats: BigInt(asSats(t.usd)), feeSats: BigInt(asSats(t.feeUsd ?? 0)) })),
+  };
 }
 
 let unsubscribe: (() => void) | null = null;
@@ -30,6 +48,9 @@ export const useWallet = create<WalletState>()(
   (set, get) => ({
   status: "idle",
   balance: null,
+  sats: null,
+  usd: 0,
+  holdIn: "bitcoin",
   txs: [],
   rates: {},
   lightningAddress: null,
@@ -59,8 +80,8 @@ export const useWallet = create<WalletState>()(
 
   async refresh() {
     try {
-      const [balance, txs] = await Promise.all([wallet.balanceSats(), wallet.listTransactions(60)]);
-      set({ balance: Number(balance), txs });
+      const [b, txs, holdIn] = await Promise.all([wallet.balances(), wallet.listTransactions(60), wallet.holdIn().catch(() => get().holdIn)]);
+      set({ ...valued(b, txs, get().rates.USD), holdIn });
     } catch (e) {
       set({ error: (e as Error).message });
     }
@@ -68,7 +89,9 @@ export const useWallet = create<WalletState>()(
 
   async refreshRates() {
     try {
-      set({ rates: await wallet.fiatRates() });
+      const rates = await wallet.fiatRates();
+      const { sats, usd, txs } = get();
+      set({ rates, ...(sats !== null ? valued({ sats: BigInt(sats), usd }, txs, rates.USD) : {}) });
     } catch {
       // Rates are a convenience; the wallet works without them.
     }
@@ -76,16 +99,28 @@ export const useWallet = create<WalletState>()(
 
   setLightningAddress: (a, lnurl = null) => set({ lightningAddress: a, lnurl }),
 
+  async setHoldIn(to) {
+    const before = get().holdIn;
+    set({ holdIn: to });
+    try {
+      await wallet.setHoldIn(to);
+      await get().refresh();
+    } catch (e) {
+      set({ holdIn: before });
+      throw e;
+    }
+  },
+
   reset() {
     unsubscribe?.();
     unsubscribe = null;
-    set({ status: "idle", balance: null, txs: [], lightningAddress: null, lnurl: null, error: undefined });
+    set({ status: "idle", balance: null, sats: null, usd: 0, holdIn: "bitcoin", txs: [], lightningAddress: null, lnurl: null, error: undefined });
   },
   }),
   {
     name: "pontmore.wallet",
     storage: createJSONStorage(() => AsyncStorage),
-    partialize: (s) => ({ balance: s.balance, rates: s.rates, lightningAddress: s.lightningAddress, lnurl: s.lnurl }),
+    partialize: (s) => ({ balance: s.balance, sats: s.sats, usd: s.usd, holdIn: s.holdIn, rates: s.rates, lightningAddress: s.lightningAddress, lnurl: s.lnurl }),
   },
   ),
 );

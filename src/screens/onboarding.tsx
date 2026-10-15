@@ -12,8 +12,8 @@ import { publish, sign } from "../services/nostr";
 import * as wallet from "../services/wallet";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
-import { Button, Chip, Field, Logo, Notice, Screen, Text, success } from "../ui/components";
-import { toastError } from "../ui/extras";
+import { Button, Chip, Field, Logo, Notice, Screen, Text, Wordmark, success } from "../ui/components";
+import { toast, toastError } from "../ui/extras";
 import { space, useColors } from "../ui/theme";
 
 export function WelcomeScreen() {
@@ -27,7 +27,10 @@ export function WelcomeScreen() {
     <View style={{ flex: 1, backgroundColor: c.hero, paddingTop: insets.top + space.xxl, paddingBottom: insets.bottom + space.lg }}>
       <StatusBar style="light" />
       <View style={{ paddingHorizontal: space.xl, gap: space.xl, flex: 1, justifyContent: "center" }}>
-        <Logo size={72} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }} accessible accessibilityLabel={BRAND.name}>
+          <Logo size={64} />
+          <Wordmark height={40} color={c.heroText} />
+        </View>
         <View style={{ gap: space.md }}>
           <Text variant="hero" color={c.heroText}>
             {BRAND.tagline}
@@ -89,7 +92,8 @@ export function PickNameScreen() {
     }
     if (username.length >= 3) {
       // The wallet may still be connecting; don't hold the person here for long.
-      const claim = wallet.claimFirstFree(username).then((a) => {
+      // A restored wallet may already have its address: keep it rather than claim another.
+      const claim = wallet.lightningAddressInfo().then((have) => have ?? wallet.claimFirstFree(username)).then((a) => {
         useWallet.getState().setLightningAddress(a.address, a.lnurl);
         if (keys && clean) void publish(sign(profileTemplate({ name: clean, about: profile.about, lud16: a.address }), keys.identity.sk)).catch(() => undefined);
         return a;
@@ -109,8 +113,8 @@ export function PickNameScreen() {
         <Field value={name} onChangeText={setName} placeholder="Your name" autoFocus maxLength={48} returnKeyType="done" onSubmitEditing={done} />
         {username.length >= 3 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Feather name="at-sign" size={14} color={c.primary} />
-            <Text variant="label" color={c.primary}>
+            <Feather name="at-sign" size={14} color={c.primaryInk} />
+            <Text variant="label" color={c.primaryInk}>
               {username}
             </Text>
             <Text variant="caption" muted>
@@ -154,6 +158,8 @@ export function RestoreScreen() {
             setBusy(true);
             try {
               await restore(text);
+              const name = useSession.getState().profile.name;
+              toast(name ? `Welcome back, ${name}` : "Wallet restored", "success");
             } catch (e) {
               toastError(e);
               setBusy(false);
@@ -162,8 +168,8 @@ export function RestoreScreen() {
         />
       }
     >
-      <Text variant="title">Enter your recovery phrase</Text>
-      <Text muted>Type your 12 or 24 words in order, separated by spaces. Your money, your username and your swaps come back with it.</Text>
+      <Text variant="title">Enter your recovery words</Text>
+      <Text muted>Type them in order, with a space between each. Your money, name and username come back.</Text>
       <Field
         value={text}
         onChangeText={setText}
@@ -182,8 +188,8 @@ export function RestoreScreen() {
           ))}
         </View>
       )}
-      <Notice tone="warning" title={`Only ever type this into ${BRAND.name}`}>
-        {`Nobody from ${BRAND.name}, and no agent, will ever ask for these words.`}
+      <Notice tone="warning" title={`Only type your words into ${BRAND.name}`}>
+        {`No one from ${BRAND.name}, and no agent, will ever ask for them.`}
       </Notice>
     </Screen>
   );

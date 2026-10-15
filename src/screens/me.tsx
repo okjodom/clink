@@ -107,7 +107,7 @@ export function MeScreen() {
 
       <Card tone={mode === "agent" ? "primary" : "accent"}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-          <Feather name={mode === "agent" ? "user" : "trending-up"} size={22} color={mode === "agent" ? c.primary : c.accent} />
+          <Feather name={mode === "agent" ? "user" : "trending-up"} size={22} color={mode === "agent" ? c.primaryInk : c.accent} />
           <View style={{ flex: 1 }}>
             <Text variant="heading">{mode === "agent" ? "Switch to personal mode" : configured ? "Switch to agent mode" : "Earn as an agent"}</Text>
             <Text variant="caption" muted>
@@ -154,7 +154,7 @@ export function MeScreen() {
       </Section>
 
       <Card tone="alt" onPress={() => nav.navigate("Advanced")} style={{ flexDirection: "row", alignItems: "center" }}>
-        <Feather name="key" size={20} color={c.primary} />
+        <Feather name="key" size={20} color={c.primaryInk} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="label">Your keys, your money</Text>
           <Text variant="caption" muted>
@@ -171,7 +171,7 @@ export function MeScreen() {
               key={cur.code}
               left={<Text variant="title">{cur.flag}</Text>}
               title={`${cur.code} · ${cur.name}`}
-              right={cur.code === currency ? <Feather name="check" size={18} color={c.primary} /> : undefined}
+              right={cur.code === currency ? <Feather name="check" size={18} color={c.primaryInk} /> : undefined}
               onPress={() => {
                 setCurrency(cur.code);
                 setCurrencyOpen(false);
@@ -219,7 +219,7 @@ export function AdvancedScreen() {
         {facts.map((f) => (
           <View key={f.title} style={{ flexDirection: "row", gap: space.md }}>
             <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: c.primarySoft, alignItems: "center", justifyContent: "center" }}>
-              <Feather name={f.icon} size={18} color={c.primary} />
+              <Feather name={f.icon} size={18} color={c.primaryInk} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text variant="label">{f.title}</Text>
@@ -233,9 +233,9 @@ export function AdvancedScreen() {
 
       <Section title="Controls">
         <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-          <Row icon="shield" title="Recovery phrase" subtitle={backedUp ? "12 words, written down" : "Not written down yet"} chevron onPress={() => nav.navigate("Backup")} />
+          <Row icon="shield" title="Recovery words" subtitle={backedUp ? "Written down" : "Not written down yet"} chevron onPress={() => nav.navigate("Backup")} />
           <Divider />
-          <Row icon="key" title="Nostr identity" subtitle={`${npub(keys.identity.pk).slice(0, 18)}…`} chevron onPress={() => nav.navigate("Identity")} />
+          <Row icon="key" title="Your ID" subtitle={`${npub(keys.identity.pk).slice(0, 18)}…`} chevron onPress={() => nav.navigate("Identity")} />
           <Divider />
           <Row icon="radio" title="Relays" subtitle="Where offers, swaps and messages travel" chevron onPress={() => nav.navigate("Relays")} />
           <Divider />
@@ -262,14 +262,14 @@ export function IdentityScreen() {
   const keys = useSession((s) => s.keys);
   if (!keys) return null;
   return (
-    <Screen back title="Identity">
+    <Screen back title="Your ID">
       <Text muted>
-        Your Nostr identity is derived from your recovery phrase (NIP-06), so restoring your wallet restores it too. Agent mode adds two more derived keys.
+        Your ID comes from your 12 words, so restoring your wallet brings it back. Agent mode uses two more keys, also made from your words.
       </Text>
       <CopyField value={npub(keys.identity.pk)} label="Your npub" />
       <CopyField value={npub(keys.escrow.pk)} label="Escrow key (agent mode)" short />
       <CopyField value={npub(keys.resolver.pk)} label="Resolver key (agent mode)" short />
-      <Notice tone="info">The escrow key signs your agent's lock, settle and refund records. The resolver key signs dispute resolutions for your swaps.</Notice>
+      <Notice tone="info">The escrow key signs your agent's locks, payouts and refunds. The resolver key signs decisions on disputes.</Notice>
     </Screen>
   );
 }
@@ -279,6 +279,7 @@ export function RelaysScreen() {
   const [list, setList] = useState(relays);
   const [input, setInput] = useState("");
   const status = relayStatus();
+  const c = useColors();
   return (
     <Screen
       back
@@ -299,7 +300,7 @@ export function RelaysScreen() {
           <Row
             key={r}
             icon="radio"
-            iconColor={status.get(r) ? "#2f9e44" : undefined}
+            iconColor={status.get(r) ? c.positive : undefined}
             title={r.replace("wss://", "")}
             subtitle={status.get(r) ? "Connected" : "Not connected"}
             right={<Button small kind="ghost" title="Remove" onPress={() => setList(list.filter((x) => x !== r))} />}
@@ -340,7 +341,7 @@ export function SignOutScreen() {
           onPress={async () => {
             const ok = await confirm({
               title: "Remove wallet?",
-              message: "Without your recovery phrase this wallet is gone for good.",
+              message: "Without your 12 words, this wallet is gone for good.",
               confirmLabel: "Remove wallet",
               cancelLabel: "Keep it",
               tone: "danger",
@@ -357,12 +358,12 @@ export function SignOutScreen() {
         />
       }
     >
-      <Notice tone="danger" title="This deletes your keys from this phone">
-        {`You can restore later only with your recovery phrase.${balance ? ` This wallet holds ${balance.toLocaleString()} sats.` : ""}`}
+      <Notice tone="danger" title="This removes your wallet from this phone">
+        {`Only your 12 words can bring it back.${balance ? ` This wallet holds ${balance.toLocaleString()} sats.` : ""}`}
       </Notice>
       {!backedUp && (
         <Notice tone="warning" title="You haven't backed up" action={<Button small kind="secondary" title="Back up first" onPress={() => nav.navigate("Backup")} />}>
-          Back up before removing, or you'll lose access.
+          Back up first, or you'll lose this wallet.
         </Notice>
       )}
       <Field label='Type "remove" to confirm' value={typed} onChangeText={setTyped} autoCapitalize="none" autoCorrect={false} />

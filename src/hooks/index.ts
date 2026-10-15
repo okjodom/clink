@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BRAND } from "../brand";
+import { formatUsd } from "../lib/stablecoins";
 import * as wallet from "../services/wallet";
 
 import { settledAt, swapProfit } from "../lib/earnings";
@@ -208,6 +209,13 @@ export function useCelebrateIncoming() {
       if (p.direction !== "in" || p.status !== "complete" || p.kind === "htlc" || p.timestamp < startedAt - 5) return;
       if (/^Pont(?:spark|more) swap /.test(p.description ?? "") || seen.has(p.id)) return;
       seen.add(p.id);
+      if (p.usd !== undefined) {
+        // Dollars: lead with the person's own money when there's a price, the dollars underneath.
+        const usdPerBtc = useWallet.getState().rates.USD;
+        const sats = usdPerBtc ? Math.round((p.usd / usdPerBtc) * 1e8) : 0;
+        celebrate({ fiatCode: "USD", label: "MONEY IN", amountLabel: sats ? `+${ref.current.primary(sats)}` : `+${formatUsd(p.usd)}`, caption: sats ? formatUsd(p.usd) : "Received" });
+        return;
+      }
       celebrate({ fiatCode: currency, label: "MONEY IN", amountLabel: `+${ref.current.primary(p.amountSats)}`, caption: ref.current.secondary(p.amountSats) ?? "Received" });
     });
   }, [phase, currency]);

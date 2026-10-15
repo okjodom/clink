@@ -8,6 +8,9 @@
 import { Paths } from "expo-file-system";
 import {
   connect as breezConnect,
+  ConversionInfo,
+  ConversionPurpose,
+  CrossChainRouteFilter,
   defaultConfig,
   InputType,
   Network,
@@ -21,8 +24,12 @@ import {
   Seed,
   SendPaymentMethod,
   SendPaymentOptions,
+  SparkAsset,
   SparkHtlcStatus,
+  StableBalanceActiveLabel,
   type BreezSdkInterface,
+  type CrossChainAddressDetails,
+  type CrossChainRoutePair,
   type LnurlPayRequestDetails,
   type Payment,
   type SdkEvent,
@@ -34,11 +41,13 @@ import { BREEZ_API_KEY, BREEZ_NETWORK } from "./config";
 import { deleteSecret, getSecret, setSecret } from "./secure";
 import { isValidMnemonic, newMnemonic, normaliseMnemonic } from "../lib/keys";
 import { BRAND } from "../brand";
+import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBaseUnits, toBaseUnits } from "../lib/stablecoins";
 import { usernameFrom } from "../lib/username";
 
 export { usernameFrom };
 
 const MNEMONIC_KEY = "wallet.mnemonic";
+const MAINNET = BREEZ_NETWORK !== "regtest";
 const STORAGE_DIR = "breez-spark";
 
 export class WalletConfigError extends Error {}
@@ -103,6 +112,13 @@ export async function connect(): Promise<BreezSdkInterface> {
       apiKey: BREEZ_API_KEY,
       // Spark-to-Spark keeps swaps and in-app transfers instant and cheap.
       preferSparkOverLightning: true,
+      // "Hold in dollars": Breez converts incoming bitcoin to USDB and back
+      // again when a payment needs bitcoin. Off until the person turns it on.
+      stableBalanceConfig: MAINNET
+        ? { tokens: [{ label: DOLLARS_LABEL, tokenIdentifier: USDB_TOKEN }], defaultActiveLabel: undefined, thresholdSats: undefined, maxSlippageBps: undefined }
+        : undefined,
+      // USDT/USDC to and from other chains. Mainnet only.
+      crossChainConfig: MAINNET ? { defaultSlippageBps: undefined, defaultTargetOverpayBps: undefined } : undefined,
     };
     const instance = await breezConnect({
       config,
@@ -112,7 +128,9 @@ export async function connect(): Promise<BreezSdkInterface> {
     listenerId = await instance.addEventListener({
       onEvent: async (event: SdkEvent) => {
         const tagged = event as unknown as { tag?: string; inner?: { payment?: Payment } };
-        if (tagged.inner?.payment) emit({ type: "payment", payment: toTx(tagged.inner.payment) });
+        // The wallet's own bitcoin<->dollar conversions are bookkeeping, not money in or out.
+        if (tagged.inner?.payment && isOwnConversion(tagged.inner.payment)) emit({ type: "synced" });
+        else if (tagged.inner?.payment) emit({ type: "payment", payment: toTx(tagged.inner.payment) });
         else if (tagged.tag === "Synced" || tagged.tag === "ClaimedDeposits") emit({ type: "synced" });
       },
     });
@@ -158,18 +176,68 @@ export function onWalletEvent(listener: (e: WalletEvent) => void): () => void {
 
 // -- balance, rates, history -------------------------------------------------
 
-/** `synced` waits for the wallet to catch up first, e.g. before committing funds. */
-export async function balanceSats(synced = false): Promise<bigint> {
+export interface Balances {
+  sats: bigint;
+  /** Dollars held as USDB. */
+  usd: number;
+}
+
+export async function balances(synced = false): Promise<Balances> {
   const s = await connect();
   const info = await s.getInfo({ ensureSynced: synced });
-  return BigInt(info.balanceSats);
+  const usdb = info.tokenBalances.get(USDB_TOKEN);
+  return { sats: BigInt(info.balanceSats), usd: usdb ? fromBaseUnits(BigInt(usdb.balance), usdb.tokenMetadata.decimals) : 0 };
+}
+
+/** Latest BTC price in USD, for valuing dollars in sats. */
+let usdPerBtc: number | null = null;
+
+/** Dollars as sats at today's price, less a percent for the conversion it would take. */
+export function usdAsSats(usd: number, haircut = 0.01): bigint {
+  if (!(usd > 0) || !usdPerBtc) return 0n;
+  return BigInt(Math.floor((usd / usdPerBtc) * 1e8 * (1 - haircut)));
+}
+
+/**
+ * What the wallet can spend, in sats: bitcoin plus dollars, which Breez
+ * converts on the way out. `synced` waits for the wallet to catch up first,
+ * e.g. before committing funds.
+ */
+export async function balanceSats(synced = false): Promise<bigint> {
+  const b = await balances(synced);
+  if (b.usd > 0 && !usdPerBtc) await fiatRates().catch(() => undefined);
+  return b.sats + usdAsSats(b.usd);
 }
 
 /** Market price of 1 BTC per fiat currency code, from Breez. */
 export async function fiatRates(): Promise<Record<string, number>> {
   const s = await connect();
   const { rates } = await s.listFiatRates();
-  return Object.fromEntries(rates.map((r) => [r.coin.toUpperCase(), r.value]));
+  const out = Object.fromEntries(rates.map((r) => [r.coin.toUpperCase(), r.value]));
+  if (out.USD) usdPerBtc = out.USD;
+  return out;
+}
+
+// -- hold in dollars or bitcoin ----------------------------------------------
+
+export type HoldIn = "dollars" | "bitcoin";
+
+export async function holdIn(): Promise<HoldIn> {
+  if (!MAINNET) return "bitcoin";
+  const s = await connect();
+  const settings = await s.getUserSettings();
+  return settings.stableBalanceActiveLabel ? "dollars" : "bitcoin";
+}
+
+/** Switching converts what's there now: bitcoin to dollars, or back. */
+export async function setHoldIn(to: HoldIn): Promise<void> {
+  if (!MAINNET) throw new Error("Dollars are only available on mainnet");
+  const s = await connect();
+  await s.updateUserSettings({
+    sparkPrivateModeEnabled: undefined,
+    stableBalanceActiveLabel: to === "dollars" ? new StableBalanceActiveLabel.Set({ label: DOLLARS_LABEL }) : new StableBalanceActiveLabel.Unset(),
+    sparkMasterIdentityPublicKey: undefined,
+  });
 }
 
 export type TxKind = "lightning" | "spark" | "onchain" | "htlc" | "other";
@@ -177,8 +245,12 @@ export type TxKind = "lightning" | "spark" | "onchain" | "htlc" | "other";
 export interface WalletTx {
   id: string;
   direction: "in" | "out";
+  /** For dollar payments, worth this many sats today (filled in by the wallet store). */
   amountSats: bigint;
   feeSats: bigint;
+  /** Set when the payment moved dollars rather than bitcoin. */
+  usd?: number;
+  feeUsd?: number;
   status: "complete" | "pending" | "failed";
   timestamp: number;
   kind: TxKind;
@@ -204,8 +276,18 @@ function htlcOf(p: Payment): WalletTx["htlc"] {
   };
 }
 
+/** One of the wallet's own bitcoin<->dollar conversions, rather than a payment. */
+export function isOwnConversion(p: Payment): boolean {
+  const d = p.details;
+  const info = d && (PaymentDetails.Spark.instanceOf(d) || PaymentDetails.Token.instanceOf(d)) ? d.inner.conversionInfo : undefined;
+  if (!info || !ConversionInfo.Amm.instanceOf(info)) return false;
+  const purpose = info.inner.purpose;
+  return !!purpose && (ConversionPurpose.AutoConversion.instanceOf(purpose) || ConversionPurpose.SelfTransfer.instanceOf(purpose));
+}
+
 export function toTx(p: Payment): WalletTx {
   const d = p.details;
+  const token = d && PaymentDetails.Token.instanceOf(d) ? d.inner.metadata : undefined;
   const isSpark = !!d && PaymentDetails.Spark.instanceOf(d);
   const htlc = isSpark ? htlcOf(p) : undefined;
   const kind: TxKind = htlc
@@ -228,6 +310,9 @@ export function toTx(p: Payment): WalletTx {
     kind,
     description: description ?? undefined,
     htlc,
+    ...(token
+      ? { amountSats: 0n, feeSats: 0n, usd: fromBaseUnits(BigInt(p.amount), token.decimals), feeUsd: fromBaseUnits(BigInt(p.fees), token.decimals) }
+      : {}),
   };
 }
 
@@ -244,7 +329,7 @@ export async function listTransactions(limit = 50): Promise<WalletTx[]> {
     limit,
     sortAscending: false,
   });
-  return payments.map(toTx);
+  return payments.filter((p) => !isOwnConversion(p)).map(toTx);
 }
 
 // -- receive -----------------------------------------------------------------
@@ -296,6 +381,28 @@ export async function claimLightningAddress(username: string): Promise<AddressIn
   return { address: info.lightningAddress, lnurl: info.lnurl.bech32 };
 }
 
+/** The service Lightning addresses are registered on, e.g. "breez.tips". */
+export function lightningDomain(): string | null {
+  try {
+    return defaultConfig(BREEZ_NETWORK === "regtest" ? Network.Regtest : Network.Mainnet).lnurlDomain ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * After a restore: the address this wallet already has, or else `username`
+ * claimed again (it was this wallet's before). Null if someone else took it.
+ */
+export async function reclaimLightningAddress(username: string): Promise<AddressInfo | null> {
+  const existing = await lightningAddressInfo();
+  if (existing) return existing;
+  const s = await connect();
+  if (!(await s.checkLightningAddressAvailable({ username }))) return null;
+  const info = await s.registerLightningAddress({ username, description: `${BRAND.name} wallet` });
+  return { address: info.lightningAddress, lnurl: info.lnurl.bech32 };
+}
+
 /**
  * Claim `base`, or the first free variant of it (base7, base42…), so picking
  * a name never ends on "that name is taken".
@@ -319,7 +426,9 @@ export type ParsedInput =
   | { type: "bolt11"; raw: string; amountSats?: bigint; description?: string }
   | { type: "lnurl"; raw: string; address?: string; payRequest: LnurlPayRequestDetails; minSats: bigint; maxSats: bigint }
   | { type: "onchain"; raw: string; address: string; amountSats?: bigint }
-  | { type: "spark"; raw: string; address: string; amountSats?: bigint };
+  | { type: "spark"; raw: string; address: string; amountSats?: bigint }
+  /** A USDT/USDC address on another chain. */
+  | { type: "stablecoin"; raw: string; address: string; details: CrossChainAddressDetails };
 
 export async function parseInput(text: string): Promise<ParsedInput> {
   const s = await connect();
@@ -366,6 +475,9 @@ function fromInput(input: InputType, raw: string, amountHint?: bigint): ParsedIn
   if (InputType.SparkAddress.instanceOf(input)) {
     return { type: "spark", raw, address: input.inner[0].address, amountSats: amountHint };
   }
+  if (InputType.CrossChainAddress.instanceOf(input)) {
+    return { type: "stablecoin", raw, address: input.inner[0].address, details: input.inner[0] };
+  }
   if (InputType.Bip21.instanceOf(input)) {
     const d = input.inner[0];
     const amount = d.amountSat !== undefined ? BigInt(d.amountSat) : undefined;
@@ -387,6 +499,7 @@ export interface PreparedSend {
 
 export async function prepareSend(input: ParsedInput, amountSats?: bigint, comment?: string): Promise<PreparedSend> {
   const s = await connect();
+  if (input.type === "stablecoin") throw new Error("Use prepareStablecoinSend for USDT/USDC");
   if (input.type === "lnurl") {
     if (!amountSats) throw new Error("Enter an amount");
     const prepared = await s.prepareLnurlPay({
@@ -449,6 +562,139 @@ function estimateFee(method: unknown): bigint {
     ?.speedMedium;
   if (med) return BigInt(med.userFeeSat ?? 0n) + BigInt(med.l1BroadcastFeeSat ?? 0n);
   return 0n;
+}
+
+// -- USDT / USDC on other chains ---------------------------------------------
+
+/** One way to move USDT or USDC between this wallet and another chain. */
+export interface StableRoute {
+  /** e.g. "USDT on Tron". */
+  label: string;
+  asset: string;
+  chain: string;
+  decimals: number;
+  /** Smallest and largest amounts in dollars, when the provider says. */
+  minUsd?: number;
+  maxUsd?: number;
+  /** Whether the route can pay out of (or into) dollars directly. */
+  takesDollars: boolean;
+  route: CrossChainRoutePair;
+}
+
+function toRoute(r: CrossChainRoutePair): StableRoute {
+  const accepted = r.acceptedAssets.map((a) => ({ token: SparkAsset.Token.instanceOf(a.asset) ? a.asset.inner.tokenIdentifier : undefined, limits: a.limits }));
+  const dollars = accepted.find((a) => a.token === USDB_TOKEN);
+  const limits = (dollars ?? accepted[0])?.limits;
+  const cents = (v: bigint | undefined) => (v === undefined ? undefined : Number(v) / 100);
+  return {
+    label: `${assetLabel(r.asset)} on ${chainLabel(r.chain)}`,
+    asset: assetLabel(r.asset),
+    chain: r.chain,
+    decimals: r.decimals,
+    minUsd: cents(limits?.minUsdCents),
+    maxUsd: cents(limits?.maxUsdCents),
+    takesDollars: !!dollars,
+    route: r,
+  };
+}
+
+/** USDT/USDC first, popular chains first, one entry per asset and chain. */
+function tidy(routes: CrossChainRoutePair[]): StableRoute[] {
+  const seen = new Set<string>();
+  return routes
+    .map(toRoute)
+    .filter((r) => (r.asset === "USDT" || r.asset === "USDC") && !seen.has(r.label) && !!seen.add(r.label))
+    .sort((a, b) => chainOrder(a.chain, b.chain) || a.asset.localeCompare(b.asset));
+}
+
+/** Ways someone can pay this wallet in USDT or USDC. */
+export async function stablecoinReceiveRoutes(): Promise<StableRoute[]> {
+  const s = await connect();
+  return tidy(await s.getCrossChainRoutes(new CrossChainRouteFilter.Receive({ contractAddress: undefined })));
+}
+
+export interface StablecoinRequest {
+  /** What the sender pays to: a bare address (Tron, Solana) or an EIP-681 URI. */
+  paymentRequest: string;
+  depositAddress: string;
+  /** What to ask the sender for, in dollars (fees are on top of what you get). */
+  sendUsd: number;
+  expiresAt: number;
+}
+
+/**
+ * A one-off address for someone to pay `usd` in USDT/USDC on `route`. It lands
+ * as dollars when the wallet holds dollars, otherwise as bitcoin.
+ */
+export async function requestStablecoin(route: StableRoute, usd: string): Promise<StablecoinRequest> {
+  const s = await connect();
+  const res = await s.receivePayment({
+    paymentMethod: new ReceivePaymentMethod.CrossChain({
+      route: route.route,
+      amount: toBaseUnits(usd, route.decimals),
+      destination: undefined,
+      feeMode: undefined,
+      maxSlippageBps: undefined,
+      targetOverpayBps: undefined,
+    }),
+  });
+  const info = res.crossChainInfo;
+  if (!info) throw new Error("No deposit address came back. Try again.");
+  return {
+    paymentRequest: res.paymentRequest,
+    depositAddress: info.depositAddress,
+    sendUsd: fromBaseUnits(BigInt(info.depositAmount), route.decimals),
+    expiresAt: Number(info.expiresAt),
+  };
+}
+
+/** Ways to pay this USDT/USDC address. */
+export async function stablecoinSendRoutes(input: Extract<ParsedInput, { type: "stablecoin" }>): Promise<StableRoute[]> {
+  const s = await connect();
+  return tidy(await s.getCrossChainRoutes(new CrossChainRouteFilter.Send({ addressDetails: input.details })));
+}
+
+export interface PreparedStablecoinSend {
+  /** What the recipient should get, in dollars. */
+  theyGetUsd: number;
+  feeUsd: number;
+  /** Paid from dollars when there are enough, otherwise from bitcoin. */
+  from: "dollars" | "bitcoin";
+  expiresAt: number;
+  send: () => Promise<WalletTx>;
+}
+
+/** Pay `usd` in USDT/USDC to `input` over `route`. */
+export async function prepareStablecoinSend(
+  input: Extract<ParsedInput, { type: "stablecoin" }>,
+  route: StableRoute,
+  usd: string,
+): Promise<PreparedStablecoinSend> {
+  const s = await connect();
+  const have = await balances();
+  const fromDollars = route.takesDollars && have.usd >= Number(usd);
+  if (!fromDollars && !usdPerBtc) await fiatRates();
+  if (!fromDollars && !usdPerBtc) throw new Error("Couldn't get today's bitcoin price. Try again.");
+  const prepared = await s.prepareSendPayment({
+    paymentRequest: new PaymentRequest.CrossChain({ address: input.address, route: route.route, maxSlippageBps: undefined, targetOverpayBps: undefined }),
+    amount: fromDollars ? toBaseUnits(usd, 6) : BigInt(Math.ceil((Number(usd) / usdPerBtc!) * 1e8)),
+    tokenIdentifier: fromDollars ? USDB_TOKEN : undefined,
+    conversionOptions: undefined,
+    feePolicy: undefined,
+  });
+  const method = prepared.paymentMethod;
+  if (!SendPaymentMethod.CrossChainAddress.instanceOf(method)) throw new Error("This address can't be paid in USDT or USDC");
+  const q = method.inner;
+  return {
+    theyGetUsd: fromBaseUnits(BigInt(q.estimatedOut), route.decimals),
+    feeUsd: fromBaseUnits(BigInt(q.feeAmount), route.decimals),
+    from: fromDollars ? "dollars" : "bitcoin",
+    expiresAt: Number(q.expiresAt),
+    send: async () => {
+      const res = await s.sendPayment({ prepareResponse: prepared, options: undefined, idempotencyKey: undefined });
+      return toTx(res.payment);
+    },
+  };
 }
 
 // -- HTLC escrow -------------------------------------------------------------

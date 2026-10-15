@@ -10,18 +10,20 @@ import { errorText } from "../lib/errors";
 import { BRAND } from "../brand";
 import { useMoney } from "../hooks";
 import { parseAgentLink } from "../lib/links";
+import { formatUsd, looksLikeStablecoinAddress } from "../lib/stablecoins";
 import { expandUsername } from "../lib/username";
 import * as wallet from "../services/wallet";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
 import { AmountDisplay, AmountPad, useAmountInput } from "../ui/amount";
-import { Avatar, Button, Card, Field, Notice, Row, Screen, Section, Text, success } from "../ui/components";
-import { toast } from "../ui/extras";
+import { Avatar, Button, Card, Chip, Field, Notice, Row, Screen, Section, Text, success } from "../ui/components";
+import { NumPad, toast } from "../ui/extras";
 import { KeyValue } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
 
 /** Looks like something payable, so it's worth offering from the clipboard. */
 const PAYABLE = /^(lightning:|bitcoin:|lnbc|lntb|lnurl|bc1|tb1|sp1|spark1)|^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+const payable = (t: string) => PAYABLE.test(t) || looksLikeStablecoinAddress(t);
 
 export function SendScreen() {
   const nav = useNavigation<any>();
@@ -38,6 +40,11 @@ export function SendScreen() {
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // USDT/USDC: which asset and chain, how many dollars, and the quote.
+  const [routes, setRoutes] = useState<wallet.StableRoute[]>([]);
+  const [stableRoute, setStableRoute] = useState<wallet.StableRoute | null>(null);
+  const [usd, setUsd] = useState("0");
+  const [stableQuote, setStableQuote] = useState<wallet.PreparedStablecoinSend | null>(null);
 
   // Android reads the clipboard quietly, so offer what was just copied. (iOS would ask
   // permission every time; there the Paste button does it.)
@@ -46,7 +53,7 @@ export function SendScreen() {
     Clipboard.getStringAsync()
       .then((v) => {
         const t = v.trim();
-        if (t && t.length < 2000 && PAYABLE.test(t) && t !== ownAddress) setCopied(t);
+        if (t && t.length < 2000 && payable(t) && t !== ownAddress) setCopied(t);
       })
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,6 +62,7 @@ export function SendScreen() {
   const parse = async (value: string) => {
     setError(null);
     setPrepared(null);
+    setStableQuote(null);
     if (!value.trim()) return;
     const agent = parseAgentLink(value);
     if (agent) {
@@ -65,7 +73,12 @@ export function SendScreen() {
     try {
       const p = await wallet.parseInput(expandUsername(value, ownAddress));
       setParsed(p);
-      if (p.type === "bolt11") {
+      if (p.type === "stablecoin") {
+        const r = await wallet.stablecoinSendRoutes(p);
+        if (!r.length) throw new Error("This address can't be paid in USDT or USDC right now.");
+        setRoutes(r);
+        setStableRoute(r[0]);
+      } else if (p.type === "bolt11") {
         if (!p.amountSats) throw new Error("This request has no amount. Ask for one with an amount.");
         setPrepared(await wallet.prepareSend(p));
       } else if (p.type !== "lnurl" && p.amountSats) {
@@ -94,6 +107,10 @@ export function SendScreen() {
     setBusy(true);
     setError(null);
     try {
+      if (parsed.type === "stablecoin") {
+        if (stableRoute) setStableQuote(await wallet.prepareStablecoinSend(parsed, stableRoute, usd));
+        return;
+      }
       setPrepared(await wallet.prepareSend(parsed, BigInt(input.sats)));
     } catch (e) {
       setError(errorText(e));
@@ -103,9 +120,23 @@ export function SendScreen() {
   };
 
   const confirm = async () => {
-    if (!prepared || !parsed) return;
+    if (!parsed) return;
     setBusy(true);
     try {
+      if (stableQuote) {
+        // A quote is only good for a few minutes.
+        if (stableQuote.expiresAt && Date.now() / 1000 > stableQuote.expiresAt) {
+          setStableQuote(null);
+          throw new Error("That price expired. Review it again.");
+        }
+        await stableQuote.send();
+        success();
+        toast(`Sending ${formatUsd(stableQuote.theyGetUsd)} in ${stableRoute?.asset ?? "dollars"}`, "success");
+        void useWallet.getState().refresh();
+        nav.goBack();
+        return;
+      }
+      if (!prepared) return;
       const tx = await prepared.send();
       success();
       if (parsed.type === "lnurl" && parsed.address) useSession.getState().addRecent(parsed.address);
@@ -117,6 +148,72 @@ export function SendScreen() {
       setBusy(false);
     }
   };
+
+  /** USDT/USDC: pick the network (only when there's a choice), type dollars, confirm. */
+  function stablecoinSteps() {
+    const route = stableRoute;
+    if (!parsed || parsed.type !== "stablecoin" || !route) return null;
+    const short = parsed.address.length > 20 ? `${parsed.address.slice(0, 8)}…${parsed.address.slice(-6)}` : parsed.address;
+    const amount = Number(usd) || 0;
+    const outOfRange = amount > 0 && ((route.minUsd !== undefined && amount < route.minUsd) || (route.maxUsd !== undefined && amount > route.maxUsd));
+
+    if (!stableQuote) {
+      return (
+        <Screen
+          back
+          title={`Send ${route.asset}`}
+          scroll={false}
+          footer={<Button title="Review" loading={busy} disabled={amount <= 0 || outOfRange} onPress={review} />}
+        >
+          <Text variant="caption" muted center numberOfLines={1}>
+            To {short}
+          </Text>
+          {routes.length > 1 && (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, justifyContent: "center" }}>
+              {routes.map((r) => (
+                <Chip key={r.label} label={r.label} selected={r.label === route.label} onPress={() => setStableRoute(r)} />
+              ))}
+            </View>
+          )}
+          <View style={{ alignItems: "center", gap: 4, paddingVertical: space.lg }}>
+            <Text variant="hero" adjustsFontSizeToFit numberOfLines={1}>
+              ${usd}
+            </Text>
+            {outOfRange ? (
+              <Text variant="caption" color={c.danger}>
+                {route.minUsd !== undefined && amount < route.minUsd ? `At least ${formatUsd(route.minUsd)}` : `At most ${formatUsd(route.maxUsd ?? 0)}`}
+              </Text>
+            ) : (
+              <Text variant="caption" muted>
+                {route.label}
+              </Text>
+            )}
+            {error && <Text variant="caption" color={c.danger}>{error}</Text>}
+          </View>
+          <View style={{ flex: 1 }} />
+          <NumPad value={usd} onChange={setUsd} decimals={2} max={9} />
+        </Screen>
+      );
+    }
+
+    return (
+      <Screen back title="Confirm" footer={<Button title={`Send ${formatUsd(stableQuote.theyGetUsd)}`} loading={busy} onPress={confirm} />}>
+        <View style={{ alignItems: "center", gap: 4, paddingVertical: space.xl }}>
+          <Text variant="hero" adjustsFontSizeToFit numberOfLines={1}>
+            {formatUsd(stableQuote.theyGetUsd)}
+          </Text>
+          <Text muted>{route.label}</Text>
+        </View>
+        <Card>
+          <KeyValue label="To" value={short} />
+          <KeyValue label="Fee" value={formatUsd(stableQuote.feeUsd)} />
+          <KeyValue label="Paid from" value={stableQuote.from === "dollars" ? "Your dollars" : "Your bitcoin"} />
+        </Card>
+        <Notice tone="info">{`Check the address is on ${route.label.split(" on ")[1]}. Money sent to the wrong network can't be brought back.`}</Notice>
+        {error && <Notice tone="danger">{error}</Notice>}
+      </Screen>
+    );
+  }
 
   // 1. who
   if (!parsed) {
@@ -131,7 +228,7 @@ export function SendScreen() {
             setText(copied);
             void parse(copied);
           }} style={{ flexDirection: "row", alignItems: "center" }}>
-            <Feather name="clipboard" size={20} color={c.primary} />
+            <Feather name="clipboard" size={20} color={c.primaryInk} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text variant="label">Pay what you copied?</Text>
               <Text variant="caption" muted numberOfLines={1}>
@@ -145,7 +242,7 @@ export function SendScreen() {
           label="Pay to"
           value={text}
           onChangeText={setText}
-          placeholder="Username, or paste a payment code"
+          placeholder="Username, payment code or USDT/USDC address"
           autoCapitalize="none"
           autoCorrect={false}
           multiline
@@ -187,6 +284,8 @@ export function SendScreen() {
       </Screen>
     );
   }
+
+  if (parsed.type === "stablecoin") return stablecoinSteps();
 
   const dest =
     parsed.type === "lnurl" ? (parsed.address ?? "this wallet") : parsed.type === "bolt11" ? (parsed.description || "this payment request") : parsed.type === "spark" ? "this wallet" : parsed.address;
