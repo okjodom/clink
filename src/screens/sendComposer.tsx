@@ -156,7 +156,7 @@ export function SendScreen() {
   }, [route.params?.input, route.params?.scanId, route.params?.contactId]);
 
   const stable = parsed?.type === "stablecoin";
-  const fixedAmount = parsed?.type === "bolt11" ? parsed.amountSats : undefined;
+  const fixedAmount = parsed && parsed.type !== "lnurl" && parsed.type !== "stablecoin" ? parsed.amountSats : undefined;
   const sats = fixedAmount ? Number(fixedAmount) : input.sats;
   const recipient = parsed?.type === "lnurl" ? parsed.address ?? "Payment request"
     : parsed?.type === "bolt11" ? "Payment request" : parsed?.address ?? text;
