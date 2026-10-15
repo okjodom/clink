@@ -10,7 +10,7 @@ export function contactName(contact: Contact): string {
 export function ContactRow({ contact, onPress }: { contact: Contact; onPress?: () => void }) {
   const agent = contact.roles.includes("agent");
   return <Row
-    left={<Avatar pk={contact.pubkey ?? contact.address ?? contact.id} name={contactName(contact)} size={36} />}
+    left={<Avatar pk={contact.pubkey ?? contact.address ?? contact.id} name="@" size={36} />}
     title={contactName(contact)}
     subtitle={contact.address ? shortRecipient(contact.address) : agent ? "Agent you've used" : "Someone you've swapped with"}
     right={agent ? <Badge label={contact.roles.includes("user") ? "Person · Agent" : "Agent"} tone="success" /> : undefined}

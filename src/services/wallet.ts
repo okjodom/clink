@@ -256,6 +256,8 @@ export interface WalletTx {
   timestamp: number;
   kind: TxKind;
   description?: string;
+  recipient?: string;
+  invoice?: string;
   htlc?: { paymentHash: string; status: "waiting" | "released" | "returned"; expiresAt: number };
 }
 
@@ -311,6 +313,8 @@ export function toTx(p: Payment): WalletTx {
     timestamp: Number(p.timestamp),
     kind,
     description,
+    recipient: lightning?.lnurlPayInfo?.lnAddress,
+    invoice: lightning?.invoice,
     htlc,
     ...(token
       ? { amountSats: 0n, feeSats: 0n, usd: fromBaseUnits(BigInt(p.amount), token.decimals), feeUsd: fromBaseUnits(BigInt(p.fees), token.decimals) }
@@ -332,6 +336,11 @@ export async function listTransactions(limit = 50): Promise<WalletTx[]> {
     sortAscending: false,
   });
   return payments.filter((p) => !isOwnConversion(p)).map(toTx);
+}
+
+export async function getTransaction(id: string): Promise<WalletTx> {
+  const s = await connect();
+  return toTx((await s.getPayment({ paymentId: id })).payment);
 }
 
 // -- receive -----------------------------------------------------------------

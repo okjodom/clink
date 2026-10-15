@@ -3,14 +3,12 @@ import { useNavigation } from "@react-navigation/native";
 import React from "react";
 import { View } from "react-native";
 
-import { formatUsd } from "../lib/stablecoins";
 import { useMe, useMoney } from "../hooks";
 import type { SwapItem } from "../hooks";
-import { describeSwap, STEPS, timeAgo } from "../lib/swapView";
-import { channelInfo } from "../lib/channels";
+import { describeSwap, STEPS } from "../lib/swapView";
 import { unreadCount, useSwaps } from "../store/swaps";
 import type { WalletTx } from "../services/wallet";
-import { Avatar, Badge, Pulse, Row, Text, toneColors } from "./components";
+import { Badge, Pulse, Row, Text, toneColors } from "./components";
 import { space, useColors } from "./theme";
 
 export function SwapRow({ item }: { item: SwapItem }) {
@@ -20,13 +18,15 @@ export function SwapRow({ item }: { item: SwapItem }) {
   const view = describeSwap(item.rec, item.st, me);
   const unread = unreadCount(item.rec, me);
   const t = toneColors(c, view.tone);
-  const counterparty = item.rec.role === "agent" ? item.st.root.customer : item.st.root.agent;
+  const adding = item.st.root.terms.direction === "fiat_to_btc";
   return (
     <Row
       onPress={() => nav.navigate("SwapDetail", { id: item.rec.id })}
       left={
         <View>
-          <Avatar pk={counterparty} name={item.rec.local.counterpartyName} size={42} />
+          <View style={{ width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: adding ? c.primarySoft : c.positiveSoft }}>
+            <Feather name={adding ? "plus-circle" : "minus-circle"} size={22} color={adding ? c.primaryInk : c.positive} />
+          </View>
           {view.myTurn && (
             <View style={{ position: "absolute", right: -6, top: -6 }}>
               <Pulse color={c.accent} size={8} />
@@ -39,7 +39,7 @@ export function SwapRow({ item }: { item: SwapItem }) {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: t.fg }} />
           <Text variant="caption" muted numberOfLines={1} style={{ flexShrink: 1 }}>
-            {[view.headline, item.rec.local.counterpartyName, channelInfo(item.st.root.terms.payment_channel).short, timeAgo(item.rec.updatedAt)].filter(Boolean).join(" · ")}
+            {[item.rec.local.counterpartyName, view.headline].filter(Boolean).join(" · ")}
           </Text>
         </View>
       }
@@ -74,16 +74,17 @@ export function Steps({ step, tone }: { step: number; tone: "danger" | string })
 }
 
 /** Swap escrow payments carry "Pontmore swap <id prefix>"; other and older clients put their app name first. */
-function useSwapOf(tx: WalletTx): { label: string; id?: string } | null {
+function useSwapOf(tx: WalletTx): { label: string; id?: string; adding: boolean } | null {
   const prefix = tx.description?.match(/^Pont(?:spark|more) swap ([0-9a-f]{8})$/)?.[1];
   const rec = useSwaps((s) => (prefix ? Object.values(s.records).find((r) => r.id.startsWith(prefix)) : undefined));
   if (!prefix) return null;
   const who = rec?.local.counterpartyName;
   const added = tx.direction === "in";
   // To an agent, money in means a customer cashed out with them, money out that one added money.
-  if (rec?.role === "agent") return { id: rec.id, label: added ? `Cash out${who ? ` for ${who}` : ""}` : `Add money${who ? ` for ${who}` : ""}` };
+  if (rec?.role === "agent") return { id: rec.id, adding: !added, label: added ? `Cash out${who ? ` for ${who}` : ""}` : `Add money${who ? ` for ${who}` : ""}` };
   return {
     id: rec?.id,
+    adding: added,
     label: who ? (added ? `Added via ${who}` : `Cashed out via ${who}`) : added ? "Added money" : "Cashed out",
   };
 }
@@ -107,30 +108,29 @@ export function TxRow({ tx, hidden }: { tx: WalletTx; hidden?: boolean }) {
           : tx.htlc?.status === "waiting"
             ? "Set aside for cash out"
             : "Cashed out"
-      : tx.description || (incoming ? "Received" : "Sent"));
-  const icon: React.ComponentProps<typeof Feather>["name"] =
-    tx.kind === "htlc" || swapLabel ? "repeat" : tx.kind === "onchain" ? "link" : incoming ? "arrow-down-left" : "arrow-up-right";
+      : incoming ? "Received" : tx.recipient ? `Paid ${tx.recipient.split("@")[0]}` : "Sent");
+  const swapPayment = !!swap || tx.kind === "htlc";
+  const adding = swap?.adding ?? incoming;
+  const icon: React.ComponentProps<typeof Feather>["name"] = swapPayment
+    ? adding ? "plus-circle" : "minus-circle"
+    : incoming ? "arrow-down" : "arrow-up";
   const date = new Date(tx.timestamp * 1000);
   return (
     <Row
-      onPress={swap?.id ? () => nav.navigate("SwapDetail", { id: swap.id }) : undefined}
+      onPress={() => swap?.id ? nav.navigate("SwapDetail", { id: swap.id }) : nav.navigate("TransactionDetail", { id: tx.id })}
       icon={icon}
-      iconBg={incoming ? c.positiveSoft : c.surfaceAlt}
-      iconColor={incoming ? c.positive : c.text}
+      iconBg={swapPayment ? adding ? c.primarySoft : c.positiveSoft : incoming ? c.positiveSoft : c.surfaceAlt}
+      iconColor={swapPayment ? adding ? c.primaryInk : c.positive : incoming ? c.positive : c.text}
       title={label}
-      subtitle={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}${tx.status === "pending" ? " · pending" : tx.status === "failed" ? " · failed" : ""}${!incoming && tx.feeSats > 0n ? ` · fee ${money.primary(tx.feeSats)}` : ""}`}
+      subtitle={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}${tx.status === "pending" ? " · pending" : tx.status === "failed" ? " · failed" : ""}`}
       right={
         <View style={{ alignItems: "flex-end" }}>
           <Text variant="label" color={incoming ? c.positive : c.text}>
             {hidden ? "••••" : `${incoming ? "+" : "−"}${money.primary(tx.amountSats)}`}
           </Text>
-          {!hidden && (tx.usd !== undefined || money.secondary(tx.amountSats)) && (
-            <Text variant="caption" faint>
-              {tx.usd !== undefined ? formatUsd(tx.usd) : money.secondary(tx.amountSats)}
-            </Text>
-          )}
         </View>
       }
+      chevron
     />
   );
 }
