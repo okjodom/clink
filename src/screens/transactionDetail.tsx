@@ -57,7 +57,7 @@ export function TransactionDetailScreen() {
   return <Screen back title="Transaction" onRefresh={load} refreshing={refreshing}>
     <View style={{ alignItems: "center", gap: space.md, paddingVertical: space.xl }}>
       <View style={{ width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", backgroundColor: failed ? c.dangerSoft : incoming ? c.positiveSoft : c.surfaceAlt }}>
-        <Feather name={incoming ? "arrow-down" : "arrow-up"} size={30} color={failed ? c.danger : incoming ? c.positive : c.text} />
+        <Feather name={tx.status === "pending" ? "clock" : incoming ? "arrow-down" : "arrow-up"} size={30} color={failed ? c.danger : incoming ? c.positive : c.text} />
       </View>
       <Text variant="heading">{incoming ? "Received" : "Sent"}</Text>
       <Text variant="display" adjustsFontSizeToFit numberOfLines={1}>{amount}</Text>
@@ -77,8 +77,7 @@ export function TransactionDetailScreen() {
       {!incoming && <KeyValue label="Total" value={tx.usd === undefined ? `${money.primary(tx.amountSats + tx.feeSats)} · ${formatSats(tx.amountSats + tx.feeSats)}` : formatUsd(tx.usd + (tx.feeUsd ?? 0))} />}
     </Card>
     {tx.description && <Card><Text variant="caption" muted>Description</Text><Text selectable>{tx.description}</Text></Card>}
-    <CopyField value={tx.id} label="Transaction ID" short />
-    {tx.blockchainTxId && <CopyField value={tx.blockchainTxId} label="Blockchain transaction ID" short />}
+    {!tx.blockchainTxId && <CopyField value={tx.id} label="Transaction ID" short />}
     {tx.explorerUrl && <Button kind="secondary" title="View on explorer" icon="external-link" onPress={() => void Linking.openURL(tx.explorerUrl!).catch(toastError)} />}
     {tx.invoice && <Collapsible title="Payment request"><CopyField value={tx.invoice} label="Invoice" short /></Collapsible>}
   </Screen>;

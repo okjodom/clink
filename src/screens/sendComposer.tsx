@@ -7,7 +7,7 @@ import { BackHandler, Keyboard, Platform, ScrollView, View } from "react-native"
 import { useMoney } from "../hooks";
 import { errorText } from "../lib/errors";
 import { parseAgentLink } from "../lib/links";
-import { lowestFeeOption, oncePayment, quoteProblem, shortRecipient } from "../lib/sendFlow";
+import { oncePayment, quoteProblem, shortRecipient, type OnchainSpeed } from "../lib/sendFlow";
 import { formatSats } from "../lib/money";
 import { formatUsd, looksLikeStablecoinAddress, tokenAmount } from "../lib/stablecoins";
 import { expandUsername } from "../lib/username";
@@ -18,7 +18,7 @@ import { contactAddress } from "../services/contacts";
 import { ContactRow } from "../ui/contactRow";
 import { hasContactUsername, type Contact } from "../lib/contacts";
 import { AmountDisplay, AmountPad, useAmountInput } from "../ui/amount";
-import { Avatar, Button, Card, Field, IconButton, Logo, Notice, Row, Screen, Section, Text, success } from "../ui/components";
+import { Avatar, Button, Card, Field, IconButton, Logo, Notice, Row, Screen, Section, Segmented, Text, success } from "../ui/components";
 import { NumPad, QrShareSheet, Sheet, toastError } from "../ui/extras";
 import { PaymentReceiptSheet, type Receipt } from "../ui/paymentReceipt";
 import { KeyValue } from "../ui/rows";
@@ -340,15 +340,15 @@ export function SendScreen() {
           </View>
           {prepared?.onchain && <View style={{ gap: space.sm }}>
             <Text variant="label">Speed</Text>
-            {prepared.onchain.options.map((option) => <Row key={option.speed}
-              icon={option.speed === prepared.onchain!.speed ? "check-circle" : "circle"}
-              title={{ slow: "Economy", medium: "Standard", fast: "Fast" }[option.speed]}
-              subtitle={`${money.primary(option.feeSats)} · ${formatSats(option.feeSats)}${option.speed === lowestFeeOption(prepared.onchain!.options).speed ? " · Lowest fee" : ""}`}
-              onPress={busy ? undefined : () => {
-                const next = prepared.onchain!.selectSpeed(option.speed);
+            <Segmented<OnchainSpeed>
+              value={prepared.onchain.speed}
+              options={[{ value: "slow", label: "Economy", caption: "Lowest fee" }, { value: "medium", label: "Standard", caption: "Medium fees" }, { value: "fast", label: "Fast", caption: "Highest fees" }]}
+              onChange={(speed) => {
+                if (busy) return;
+                const next = prepared.onchain!.selectSpeed(speed);
                 setPrepared({ ...next, send: oncePayment(next.send) });
                 setError(null);
-              }} />)}
+              }} />
             <Text variant="caption" muted>Economy may take longer to confirm. Fees include provider and Bitcoin network charges.</Text>
           </View>}
           {stableQuote && <Notice tone="warning">{`Confirm the recipient uses ${stableRoute?.label}. This network must match.`}</Notice>}

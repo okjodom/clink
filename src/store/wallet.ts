@@ -43,6 +43,7 @@ function valued(b: wallet.Balances, txs: WalletTx[], usdPerBtc: number | undefin
 let unsubscribe: (() => void) | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshVersion = 0;
+let foregroundSync: Promise<void> | null = null;
 
 // Balance, rates and address are cached so the wallet opens on numbers, not a spinner.
 export const useWallet = create<WalletState>()(
@@ -94,12 +95,18 @@ export const useWallet = create<WalletState>()(
 
   async sync() {
     if (get().status !== "ready") return;
-    try {
-      await wallet.syncWallet();
-      if (get().status === "ready") await get().refresh();
-    } catch {
-      // Keep the last known balance and pending activity through a network outage.
-    }
+    if (foregroundSync) return foregroundSync;
+    const running = (async () => {
+      try {
+        await wallet.syncWallet();
+        if (get().status === "ready") await get().refresh();
+      } catch {
+        // Keep the last known balance and pending activity through a network outage.
+      }
+    })();
+    foregroundSync = running;
+    try { await running; }
+    finally { if (foregroundSync === running) foregroundSync = null; }
   },
 
   async refreshRates() {
@@ -128,6 +135,7 @@ export const useWallet = create<WalletState>()(
 
   reset() {
     refreshVersion++;
+    foregroundSync = null;
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = null;
     unsubscribe?.();

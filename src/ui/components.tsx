@@ -461,7 +461,7 @@ export function Chip({ label, selected, onPress, icon, emoji }: { label: string;
   );
 }
 
-export function Segmented<T extends string>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+export function Segmented<T extends string>({ options, value, onChange }: { options: { value: T; label: string; caption?: string }[]; value: T; onChange: (v: T) => void }) {
   const c = useColors();
   return (
     <View style={[styles.segment, { backgroundColor: c.surfaceAlt }]}>
@@ -479,6 +479,7 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
             <Text variant="label" color={on ? c.text : c.textMuted}>
               {o.label}
             </Text>
+            {o.caption && <Text variant="caption" color={on ? c.text : c.textMuted} center>{o.caption}</Text>}
           </Pressable>
         );
       })}

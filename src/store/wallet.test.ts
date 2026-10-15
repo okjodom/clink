@@ -44,3 +44,15 @@ it("does not restore the previous wallet's funds after reset", async () => {
   await running;
   expect(useWallet.getState().balance).toBeNull();
 });
+
+it("coalesces overlapping foreground syncs into one network call and refresh", async () => {
+  let finish!: () => void;
+  jest.mocked(wallet.syncWallet).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  useWallet.setState({ status: "ready" });
+  const first = useWallet.getState().sync();
+  const second = useWallet.getState().sync();
+  expect(wallet.syncWallet).toHaveBeenCalledTimes(1);
+  finish();
+  await Promise.all([first, second]);
+  expect(wallet.balances).toHaveBeenCalledTimes(1);
+});

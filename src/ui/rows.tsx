@@ -25,7 +25,7 @@ export function SwapRow({ item }: { item: SwapItem }) {
       left={
         <View>
           <View style={{ width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: adding ? c.primarySoft : c.positiveSoft }}>
-            <Feather name={adding ? "plus-circle" : "minus-circle"} size={22} color={adding ? c.primaryInk : c.positive} />
+            <Feather name={!view.done ? "clock" : adding ? "plus-circle" : "minus-circle"} size={22} color={adding ? c.primaryInk : c.positive} />
           </View>
           {view.myTurn && (
             <View style={{ position: "absolute", right: -6, top: -6 }}>
@@ -111,7 +111,7 @@ export function TxRow({ tx, hidden }: { tx: WalletTx; hidden?: boolean }) {
       : incoming ? "Received" : tx.recipient?.includes("@") ? `Paid ${tx.recipient.split("@")[0]}` : "Sent");
   const swapPayment = !!swap || tx.kind === "htlc";
   const adding = swap?.adding ?? incoming;
-  const icon: React.ComponentProps<typeof Feather>["name"] = swapPayment
+  const icon: React.ComponentProps<typeof Feather>["name"] = tx.status === "pending" ? "clock" : swapPayment
     ? adding ? "plus-circle" : "minus-circle"
     : incoming ? "arrow-down" : "arrow-up";
   const date = new Date(tx.timestamp * 1000);
