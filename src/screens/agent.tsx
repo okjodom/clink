@@ -6,6 +6,7 @@ import { ScrollView, View } from "react-native";
 import { BRAND } from "../brand";
 import { useActiveSwaps, useMoney, useNow, useSwapList } from "../hooks";
 import { earningsIn } from "../lib/earnings";
+import { agentMarginError, MAX_AGENT_MARGIN_PCT, validAgentMargin } from "../lib/agentLimits";
 import { channelInfo, channelsForCurrency, currencyInfo, CURRENCIES, detailsComplete, validateDetails, type ChannelDetails } from "../lib/channels";
 import { formatDecimal, isDecimalAmount } from "../lib/money";
 import { timeAgo } from "../lib/swapView";
@@ -246,10 +247,11 @@ export function AgentSetupScreen() {
         ? "Add your name."
         : !limitsOk
           ? "Check your limits."
-          : null;
+          : agentMarginError(draft);
 
   // First time, finishing opens the desk: setting up is saying you're ready.
   const save = async () => {
+    if (missing) return;
     setBusy(true);
     setProfile({ name: name.trim(), about: about.trim() });
     saveMarkets(draft);
@@ -329,7 +331,7 @@ export function AgentSetupScreen() {
         </Card>
       </Section>
 
-      <Section title="3 · Your fee">
+      <Section title={`3 · Your fee (max ${MAX_AGENT_MARGIN_PCT}%)`}>
         <View style={{ flexDirection: "row", gap: space.sm }}>
           {FEES.map((p) => (
             <Chip key={p} label={`${p}%`} selected={feePct === p} onPress={() => setFee(p)} />
@@ -422,7 +424,7 @@ function MarketSheet({ market, onClose, onSave, onRemove }: { market: Market; on
   const [m, setM] = useState<Market>(market);
   const [channelEdit, setChannelEdit] = useState<string | null>(null);
   const options = channelsForCurrency(m.currency);
-  const valid = (s: MarketSide) => !s.enabled || (isDecimalAmount(s.min) && isDecimalAmount(s.max) && Number(s.min) <= Number(s.max) && s.spreadPct >= -5 && s.spreadPct <= 30);
+  const valid = (s: MarketSide) => !s.enabled || (isDecimalAmount(s.min) && isDecimalAmount(s.max) && Number(s.min) <= Number(s.max) && validAgentMargin(s.spreadPct));
   // Back and tap-outside close the sheet; don't let them silently drop edits.
   const close = () => {
     if (!channelEdit && JSON.stringify(m) === JSON.stringify(market)) return onClose();
@@ -477,6 +479,7 @@ function MarketSheet({ market, onClose, onSave, onRemove }: { market: Market; on
         />
         {onRemove && <Button kind="danger" small title={`Remove ${m.currency}`} onPress={onRemove} />}
       </ScrollView>
+      {agentMarginError([m]) && <Notice tone="warning">{agentMarginError([m])}</Notice>}
       <Button title="Done" disabled={!valid(m.buy) || !valid(m.sell)} onPress={() => onSave(m)} />
     </Sheet>
   );
@@ -488,7 +491,7 @@ function SideEditor({ title, hint, side, currency, onChange }: { title: string; 
       <Toggle label={title} subtitle={hint} value={side.enabled} onChange={(enabled) => onChange({ ...side, enabled })} />
       {side.enabled && (
         <>
-          <Text variant="label">Your fee</Text>
+          <Text variant="label">{`Your fee (max ${MAX_AGENT_MARGIN_PCT}%)`}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
             {[0.5, 1, 2, 3, 5].map((p) => (
               <Chip key={p} label={`${p}%`} selected={side.spreadPct === p} onPress={() => onChange({ ...side, spreadPct: p })} />

@@ -15,6 +15,7 @@ import {
 import type { OfferContent } from "../protocol/offer";
 import type { Direction } from "../protocol/swap";
 import { channelInfo, detailsComplete } from "../lib/channels";
+import { validAgentMargin } from "../lib/agentLimits";
 import { agentLink } from "../lib/links";
 import type { KeyRing } from "../lib/keys";
 import { coarseFloor, compareDecimal, fromMinor, priceWithSpread, toMinor } from "../lib/money";
@@ -90,6 +91,8 @@ export function buildOffers(
   const channels = Object.keys(market.channels).filter((c) => detailsComplete(c, market.channels[c]));
   if (!channels.length || !marketPrice) return {};
   const make = (direction: Direction, cfg: MarketSide, sign: 1 | -1, capSats?: number): OfferContent | undefined => {
+    // Old persisted settings must not bypass the fee cap during background publishing.
+    if (!validAgentMargin(cfg.spreadPct)) return undefined;
     const price = priceWithSpread(marketPrice, sign * cfg.spreadPct);
     const range = limits(cfg, price, capSats);
     if (!range) return undefined;

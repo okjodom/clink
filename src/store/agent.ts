@@ -9,6 +9,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { ChannelDetails } from "../lib/channels";
+import { agentMarginError } from "../lib/agentLimits";
 
 export interface MarketSide {
   enabled: boolean;
@@ -61,7 +62,11 @@ export const useAgent = create<AgentState>()(
       lastPublishedAt: null,
       publishError: null,
 
-      saveMarkets: (markets) => set({ markets, configured: markets.length > 0 }),
+      saveMarkets: (markets) => {
+        const error = agentMarginError(markets);
+        if (error) throw new Error(error);
+        set({ markets, configured: markets.length > 0 });
+      },
       setAutoAccept: (autoAccept) => set({ autoAccept }),
       setOnline: (online) => set({ online }),
       setDescriptor: (descriptor) => set({ descriptor }),
