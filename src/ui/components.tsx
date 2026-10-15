@@ -131,7 +131,7 @@ export function Header({ title, back, right }: { title?: string; back?: boolean;
     <View style={styles.header}>
       <View style={{ width: 44 }}>
         {back && (
-          <Pressable hitSlop={12} onPress={() => nav.goBack()} style={[styles.iconBtn, { backgroundColor: c.surface }]}>
+          <Pressable hitSlop={12} onPress={() => nav.goBack()} style={({ pressed }) => [styles.iconBtn, { backgroundColor: c.surface, opacity: pressed ? 0.65 : 1 }]}>
             <Feather name="chevron-left" size={22} color={c.text} />
           </Pressable>
         )}
@@ -154,7 +154,7 @@ export function IconButton({ name, onPress, label }: { name: IconName; onPress: 
         tap();
         onPress();
       }}
-      style={[styles.iconBtn, { backgroundColor: c.surface }]}
+      style={({ pressed }) => [styles.iconBtn, { backgroundColor: c.surface, opacity: pressed ? 0.65 : 1 }]}
     >
       <Feather name={name} size={19} color={c.text} />
     </Pressable>
@@ -174,7 +174,7 @@ export function Card({ children, style, onPress, tone }: { children: React.React
         tap();
         onPress();
       }}
-      style={{ flex, flexBasis, flexGrow, flexShrink, minWidth, maxWidth, width, alignSelf }}
+      style={({ pressed }) => ({ flex, flexBasis, flexGrow, flexShrink, minWidth, maxWidth, width, alignSelf, opacity: pressed ? 0.65 : 1 })}
     >
       <View style={[styles.card, { backgroundColor: bg }, rest, flex !== undefined && { flex: 1 }]}>{children}</View>
     </Pressable>
@@ -236,6 +236,7 @@ export function Row({
   if (!onPress) return content;
   return (
     <Pressable
+      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
       onPress={() => {
         tap();
         onPress();
@@ -284,7 +285,7 @@ export function Collapsible({ title, summary, children, initiallyOpen = false }:
         }}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 2, paddingVertical: 4 }}
+        style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 2, paddingVertical: 4, opacity: pressed ? 0.65 : 1 })}
       >
         <Text variant="tiny" muted style={{ textTransform: "uppercase" }}>
           {title}
@@ -345,7 +346,7 @@ export function Button({
         tap();
         void onPress();
       }}
-      style={[styles.button, small && styles.buttonSmall, { backgroundColor: p.bg, borderColor: p.border ?? "transparent", opacity: disabled ? 0.45 : 1 }, style]}
+      style={({ pressed }) => [styles.button, small && styles.buttonSmall, { backgroundColor: p.bg, borderColor: p.border ?? "transparent" }, style, { opacity: disabled ? 0.45 : pressed ? 0.65 : 1 }]}
     >
       {loading ? (
         <ActivityIndicator color={p.fg} />
@@ -370,7 +371,7 @@ export function ActionTile({ icon, label, onPress, tone = "default" }: { icon: I
         tap();
         onPress();
       }}
-      style={{ alignItems: "center", gap: 6, flex: 1 }}
+      style={({ pressed }) => ({ alignItems: "center", gap: 6, flex: 1, opacity: pressed ? 0.65 : 1 })}
     >
       <View style={[styles.tile, { backgroundColor: hero ? "rgba(247,243,234,0.12)" : c.surface }]}>
         <Feather name={icon} size={22} color={hero ? c.heroText : c.text} />
@@ -444,9 +445,9 @@ export function Chip({ label, selected, onPress, icon, emoji }: { label: string;
         tap();
         onPress?.();
       }}
-      style={[
+      style={({ pressed }) => [
         styles.chip,
-        { backgroundColor: selected ? c.text : c.surface, borderColor: selected ? c.text : c.border },
+        { backgroundColor: selected ? c.text : c.surface, borderColor: selected ? c.text : c.border, opacity: pressed ? 0.65 : 1 },
       ]}
     >
       {icon && <Feather name={icon} size={14} color={selected ? c.bg : c.text} />}
@@ -471,7 +472,7 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
               tap();
               onChange(o.value);
             }}
-            style={[styles.segmentItem, on && { backgroundColor: c.surface, shadowOpacity: 0.08 }]}
+            style={({ pressed }) => [styles.segmentItem, on && { backgroundColor: c.surface, shadowOpacity: 0.08 }, { opacity: pressed ? 0.65 : 1 }]}
           >
             <Text variant="label" color={on ? c.text : c.textMuted}>
               {o.label}

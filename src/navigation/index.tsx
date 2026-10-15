@@ -1,10 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { createBottomTabNavigator, type BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
-import { DarkTheme, DefaultTheme, NavigationContainer, type LinkingOptions } from "@react-navigation/native";
+import { DarkTheme, DefaultTheme, NavigationContainer, useIsFocused, useNavigation, type LinkingOptions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Linking from "expo-linking";
-import React from "react";
-import { Pressable, type StyleProp, type ViewStyle } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Platform, Pressable, type StyleProp, type ViewStyle } from "react-native";
 
 import { useActiveSwaps, useMe } from "../hooks";
 import { describeSwap } from "../lib/swapView";
@@ -32,7 +32,7 @@ function useActionCount() {
   return active.filter((i) => describeSwap(i.rec, i.st, me).myTurn).length;
 }
 
-/** A plain tab button: no ripple or fade, just an instant switch and a tick. */
+/** Immediate pressed feedback, followed by a tab switch on release. */
 function TabButton({ children, style, onPress, onLongPress, accessibilityState, accessibilityLabel, testID }: BottomTabBarButtonProps) {
   return (
     <Pressable
@@ -45,7 +45,7 @@ function TabButton({ children, style, onPress, onLongPress, accessibilityState, 
         onPress?.(e);
       }}
       onLongPress={onLongPress}
-      style={style as StyleProp<ViewStyle>}
+      style={({ pressed }) => [style as StyleProp<ViewStyle>, { opacity: pressed ? 0.65 : 1 }]}
     >
       {children}
     </Pressable>
@@ -55,6 +55,16 @@ function TabButton({ children, style, onPress, onLongPress, accessibilityState, 
 function Tabs() {
   const c = useColors();
   const mode = useSession((s) => s.mode);
+  const nav = useNavigation<any>();
+  const focused = useIsFocused();
+  const previousMode = useRef(mode);
+  useEffect(() => {
+    if (!focused || previousMode.current === mode) return;
+    previousMode.current = mode;
+    // Me exists in both modes, so React Navigation otherwise preserves it.
+    // Wait for Main to regain focus if mode changed inside agent setup.
+    nav.navigate("Main", { screen: mode === "agent" ? "Desk" : "Home" });
+  }, [mode, focused, nav]);
   const pending = useActionCount();
   const icon =
     (name: React.ComponentProps<typeof Feather>["name"]) =>
@@ -110,7 +120,7 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer theme={theme} linking={phase === "ready" && !needsName ? linking : undefined}>
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, ...(Platform.OS === "android" ? { animation: "fade" as const } : {}) }}>
         {phase !== "ready" ? (
           <>
             <Stack.Screen name="Welcome" component={WelcomeScreen} />

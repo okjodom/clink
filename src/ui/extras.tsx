@@ -1,9 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Keyboard, KeyboardAvoidingView, Modal, Pressable, StyleSheet, View } from "react-native";
+import { Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import QRCode from "react-qr-code";
-import Svg, { Rect } from "react-native-svg";
+import Svg, { G, Rect } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 
@@ -36,7 +36,7 @@ export function NumPad({ value, onChange, decimals = 2, max = 12 }: { value: str
           key={k}
           onPress={() => press(k)}
           onLongPress={k === "del" ? () => onChange("0") : undefined}
-          style={styles.key}
+          style={({ pressed }) => [styles.key, { opacity: pressed ? 0.65 : 1 }]}
           disabled={k === "." && decimals === 0}
         >
           {k === "del" ? (
@@ -59,14 +59,21 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
   const insets = useSafeAreaInsets();
   const y = useRef(new Animated.Value(400)).current;
   useEffect(() => {
-    if (visible) Animated.spring(y, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 220 }).start();
-    else y.setValue(400);
+    if (!visible) {
+      y.setValue(400);
+      return;
+    }
+    const animation = Platform.OS === "android"
+      ? Animated.timing(y, { toValue: 0, duration: 180, useNativeDriver: true })
+      : Animated.spring(y, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 220 });
+    animation.start();
+    return () => animation.stop();
   }, [visible, y]);
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType={Platform.OS === "android" ? "none" : "fade"}
       // The first BACK should only hide the keyboard, as it does everywhere else.
       onRequestClose={() => (Keyboard.isVisible() ? Keyboard.dismiss() : onClose())}
       statusBarTranslucent
@@ -123,7 +130,9 @@ export function QrShareSheet({ visible, onClose, title, caption, value, fileName
         {/* Keep the white quiet zone inside the exported image, not just the surrounding View. */}
         <Svg ref={ref} width={248} height={248} viewBox="0 0 248 248">
           <Rect width={248} height={248} fill="#ffffff" />
-          <QRCode x={24} y={24} value={value} size={200} bgColor="#ffffff" fgColor="#14110f" />
+          <G transform="translate(24 24)">
+            <QRCode value={value} size={200} bgColor="#ffffff" fgColor="#14110f" />
+          </G>
         </Svg>
       </View>
       <Button title="Save QR code" icon="download" onPress={save} loading={saving} />
