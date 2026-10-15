@@ -1,6 +1,14 @@
-import { oncePayment, quotedFeeSats, quoteProblem, shortRecipient } from "./sendFlow";
+import { deliveryStatus, oncePayment, quotedFeeSats, quoteProblem, shortRecipient } from "./sendFlow";
 
 describe("send confirmation", () => {
+  it("waits for bridge delivery after the funding payment completes", () => {
+    expect(deliveryStatus("complete", { complete: false, failed: false })).toBe("pending");
+    expect(deliveryStatus("complete", { complete: true, failed: false })).toBe("complete");
+    expect(deliveryStatus("pending", { complete: true, failed: false })).toBe("pending");
+    expect(deliveryStatus("complete", { complete: false, failed: true })).toBe("failed");
+    expect(deliveryStatus("failed", { complete: true, failed: false })).toBe("failed");
+    expect(deliveryStatus("complete")).toBe("complete");
+  });
   it("includes the broadcast fee in the Bitcoin quote and balance check", () => {
     const fee = quotedFeeSats({ inner: { feeQuote: { speedMedium: { userFeeSat: 100n, l1BroadcastFeeSat: 300n } } } });
     expect(fee).toBe(400n);

@@ -1,3 +1,10 @@
+/** A bridge payment completes only when both funding and delivery complete. */
+export function deliveryStatus(source: "complete" | "pending" | "failed", bridge?: { complete: boolean; failed: boolean }): "complete" | "pending" | "failed" {
+  if (source === "failed" || bridge?.failed) return "failed";
+  if (source === "pending" || (bridge && !bridge.complete)) return "pending";
+  return "complete";
+}
+
 /** A prepared quote can only submit once, including while its first result is pending. */
 export function oncePayment<T>(send: () => Promise<T>): () => Promise<T> {
   let attempt: Promise<T> | undefined;

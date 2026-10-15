@@ -49,7 +49,7 @@ export function TransactionDetailScreen() {
   const incoming = tx.direction === "in";
   const complete = tx.status === "complete";
   const failed = tx.status === "failed";
-  const status = complete ? "Completed" : failed ? "Failed" : "Pending";
+  const status = tx.statusLabel ?? (complete ? "Completed" : failed ? "Failed" : "Pending");
   const amount = tx.usd === undefined ? money.primary(tx.amountSats) : formatUsd(tx.usd);
   const bitcoinFee = `${money.primary(tx.feeSats)} · ${formatSats(tx.feeSats)}`;
   const dollarFee = tx.feeUsd ? `$${tx.feeUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : "Free";
@@ -69,12 +69,14 @@ export function TransactionDetailScreen() {
       {tx.recipient && <KeyValue label="To" value={tx.recipient} />}
       <KeyValue label="Date" value={date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} />
       <KeyValue label="Time" value={date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })} />
-      <KeyValue label="Network" value={kindLabel[tx.kind]} />
+      <KeyValue label="Network" value={tx.network ?? kindLabel[tx.kind]} />
+      {tx.externalAmount && <KeyValue label={complete ? "Delivered" : "Estimated delivery"} value={tx.externalAmount} />}
       {!incoming && <KeyValue label="Fee" value={tx.usd === undefined ? tx.feeSats === 0n ? "Free" : bitcoinFee : dollarFee} />}
       {!incoming && <KeyValue label="Total" value={tx.usd === undefined ? `${money.primary(tx.amountSats + tx.feeSats)} · ${formatSats(tx.amountSats + tx.feeSats)}` : formatUsd(tx.usd + (tx.feeUsd ?? 0))} />}
     </Card>
     {tx.description && <Card><Text variant="caption" muted>Description</Text><Text selectable>{tx.description}</Text></Card>}
     <CopyField value={tx.id} label="Transaction ID" short />
+    {tx.blockchainTxId && <CopyField value={tx.blockchainTxId} label="Blockchain transaction ID" short />}
     {tx.invoice && <Collapsible title="Payment request"><CopyField value={tx.invoice} label="Invoice" short /></Collapsible>}
   </Screen>;
 }

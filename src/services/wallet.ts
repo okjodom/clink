@@ -9,6 +9,7 @@ import { Paths } from "expo-file-system";
 import {
   connect as breezConnect,
   ConversionInfo,
+  ConversionStatus,
   ConversionPurpose,
   CrossChainRouteFilter,
   defaultConfig,
@@ -44,7 +45,7 @@ import { BRAND } from "../brand";
 import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBaseUnits, quoteExpiry, tokenAmount, toBaseUnits } from "../lib/stablecoins";
 import { usernameFrom } from "../lib/username";
 import { paymentDescription, receiveDescription, refreshAddressBrand } from "../lib/paymentBrand";
-import { quotedFeeSats } from "../lib/sendFlow";
+import { deliveryStatus, quotedFeeSats } from "../lib/sendFlow";
 
 export { usernameFrom };
 
@@ -259,6 +260,10 @@ export interface WalletTx {
   description?: string;
   recipient?: string;
   invoice?: string;
+  blockchainTxId?: string;
+  network?: string;
+  externalAmount?: string;
+  statusLabel?: string;
   htlc?: { paymentHash: string; status: "waiting" | "released" | "returned"; expiresAt: number };
 }
 
@@ -304,18 +309,32 @@ export function toTx(p: Payment): WalletTx {
           ? "onchain"
           : "other";
   const lightning = d && PaymentDetails.Lightning.instanceOf(d) ? d.inner : undefined;
+  const conversion = d && (PaymentDetails.Spark.instanceOf(d) || PaymentDetails.Token.instanceOf(d) || PaymentDetails.Lightning.instanceOf(d)) ? d.inner.conversionInfo : undefined;
+  const crossChain = conversion && (ConversionInfo.Orchestra.instanceOf(conversion) || ConversionInfo.Boltz.instanceOf(conversion)) ? conversion.inner : undefined;
+  const outgoing = p.paymentType === PaymentType.Send;
+  const baseStatus = p.status === PaymentStatus.Completed ? "complete" : p.status === PaymentStatus.Failed ? "failed" : "pending";
+  // Paying the source leg does not mean the bridge has delivered the money.
+  const status = deliveryStatus(baseStatus, crossChain ? {
+    complete: crossChain.status === ConversionStatus.Completed,
+    failed: crossChain.status === ConversionStatus.Failed || crossChain.status === ConversionStatus.Refunded,
+  } : undefined);
   const description = paymentDescription(lightning?.description, lightning?.lnurlPayInfo?.lnAddress);
   return {
     id: p.id,
-    direction: p.paymentType === PaymentType.Send ? "out" : "in",
+    direction: outgoing ? "out" : "in",
     amountSats: BigInt(p.amount),
     feeSats: BigInt(p.fees),
-    status: p.status === PaymentStatus.Completed ? "complete" : p.status === PaymentStatus.Failed ? "failed" : "pending",
+    status,
+    statusLabel: crossChain?.status === ConversionStatus.RefundNeeded ? "Refund pending" : crossChain?.status === ConversionStatus.Refunded ? "Refunded" : undefined,
     timestamp: Number(p.timestamp),
     kind,
     description,
-    recipient: lightning?.lnurlPayInfo?.lnAddress,
+    recipient: outgoing && crossChain ? crossChain.recipientAddress : lightning?.lnurlPayInfo?.lnAddress,
     invoice: lightning?.invoice,
+    blockchainTxId: conversion && ConversionInfo.Orchestra.instanceOf(conversion) ? conversion.inner.externalTxHash
+      : d && (PaymentDetails.Withdraw.instanceOf(d) || PaymentDetails.Deposit.instanceOf(d)) ? d.inner.txId || undefined : undefined,
+    network: crossChain ? `${assetLabel(crossChain.asset)} on ${chainLabel(crossChain.chain)}` : undefined,
+    externalAmount: crossChain && outgoing ? `${tokenAmount(BigInt(crossChain.deliveredAmount ?? crossChain.estimatedOut), crossChain.assetDecimals)} ${assetLabel(crossChain.asset)}` : undefined,
     htlc,
     ...(token
       ? { amountSats: 0n, feeSats: 0n, usd: fromBaseUnits(BigInt(p.amount), token.decimals), feeUsd: fromBaseUnits(BigInt(p.fees), token.decimals) }
