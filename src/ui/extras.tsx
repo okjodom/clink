@@ -92,6 +92,33 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
 
 // -- QR + copy ---------------------------------------------------------------------
 
+/** A QR code to show or save as an image: for a shop counter, a poster or a group. */
+export function QrShareSheet({ visible, onClose, title, caption, value, fileName }: { visible: boolean; onClose: () => void; title: string; caption: string; value: string; fileName: string }) {
+  const ref = useRef<{ toDataURL: (cb: (b64: string) => void) => void } | null>(null);
+  const save = () =>
+    ref.current?.toDataURL(async (b64) => {
+      try {
+        const { Directory } = await import("expo-file-system");
+        const dir = await Directory.pickDirectoryAsync();
+        dir.createFile(`${fileName}.png`, "image/png").write(b64, { encoding: "base64" });
+        toast("QR code saved", "success");
+      } catch (e) {
+        if (!/cancel/i.test(String(e))) toastError(e);
+      }
+    });
+  return (
+    <Sheet visible={visible} onClose={onClose} title={title}>
+      <Text variant="caption" muted>
+        {caption}
+      </Text>
+      <View style={styles.qr}>
+        <QRCode ref={ref as never} value={value} size={200} bgColor="#ffffff" fgColor="#14110f" />
+      </View>
+      <Button title="Save QR code" icon="download" onPress={save} />
+    </Sheet>
+  );
+}
+
 export function QR({ value, size = 220 }: { value: string; size?: number }) {
   return (
     <View style={styles.qr}>

@@ -307,14 +307,14 @@ export function ReviewSwapScreen() {
         <Text variant="label">How you're protected</Text>
         {(buying
           ? [
-              ["lock", `The agent locks ${formatSats(q.sats)} for you first. You'll see it in your wallet before you pay.`],
+              ["lock", `The agent sets aside ${formatSats(q.sats)} for you first. You'll see it in your wallet before you pay.`],
               ["send", ch.fields.length ? `Then you send ${fiat} via ${ch.short} within about ${Math.round(SWAP_TIMING.payWindow / 60)} minutes.` : `Then you meet and pay ${fiat} in cash within about ${Math.round(SWAP_TIMING.payWindow / 60)} minutes.`],
-              ["unlock", "When the agent confirms your payment, the money unlocks into your wallet."],
+              ["unlock", "Once the agent confirms your payment, it's yours."],
             ]
           : [
-              ["lock", `Your ${formatSats(q.sats)} are locked, not sent. The agent can't take them yet.`],
+              ["lock", `Your ${formatSats(q.sats)} are set aside, not sent. The agent can't take them yet.`],
               ["send", ch.fields.length ? `The agent sends ${fiat} to your ${ch.short}.` : `You meet the agent and collect ${fiat} in cash. Agree where in the chat.`],
-              ["unlock", "You release it only after you have the cash. If it never arrives, it comes back to you."],
+              ["unlock", "You release them once you have the cash. If it never arrives, they come back to you."],
             ]
         ).map(([icon, text]) => (
           <View key={icon} style={{ flexDirection: "row", gap: space.md }}>

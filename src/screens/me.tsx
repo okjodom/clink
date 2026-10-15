@@ -18,7 +18,7 @@ import { useSession } from "../store/session";
 import { useSwaps } from "../store/swaps";
 import { useWallet } from "../store/wallet";
 import { Avatar, Badge, Button, Card, Divider, Empty, Field, Notice, Row, Screen, Section, Segmented, Text, Toggle, success } from "../ui/components";
-import { CopyField, Sheet, confirm, toast } from "../ui/extras";
+import { CopyField, QrShareSheet, Sheet, confirm, toast } from "../ui/extras";
 import { SwapRow } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
 import { useConfirmLeaveAgent } from "./agent";
@@ -34,7 +34,7 @@ export function ActivityScreen() {
   const isActive = (st: (typeof list)[number]["st"]) => !isTerminal(st) && !(st.status === "proposed" && now >= st.root.expiresAt);
   const shown = list.filter((i) => (tab === "active" ? isActive(i.st) : !isActive(i.st)));
   return (
-    <Screen large title="Swaps">
+    <Screen back title="All swaps">
       <Segmented
         value={tab}
         onChange={setTab}
@@ -70,6 +70,7 @@ export function ActivityScreen() {
 
 export function MeScreen() {
   const nav = useNavigation<any>();
+  const [shareOpen, setShareOpen] = useState(false);
   const c = useColors();
   const { keys, profile, mode, setMode, backedUp, currency, setCurrency, setProfile, preferSats, togglePreferSats } = useSession();
   const configured = useAgent((s) => s.configured);
@@ -99,7 +100,7 @@ export function MeScreen() {
           kind="secondary"
           icon="share"
           title="Share my username"
-          onPress={() => void Share.share({ message: `Pay me on ${BRAND.name}: ${lnAddress}` })}
+          onPress={() => setShareOpen(true)}
         />
       ) : (
         <Button kind="secondary" icon="at-sign" title="Pick a username" onPress={() => setClaimOpen(true)} />
@@ -194,6 +195,16 @@ export function MeScreen() {
         />
       </Sheet>
       <ClaimAddressSheet visible={claimOpen} onClose={() => setClaimOpen(false)} />
+      {lnAddress && (
+        <QrShareSheet
+          visible={shareOpen}
+          onClose={() => setShareOpen(false)}
+          title={lnAddress}
+          caption="Anyone can scan this to pay you. Save it to print or share."
+          value={lnAddress}
+          fileName={lnAddress.split("@")[0]}
+        />
+      )}
     </Screen>
   );
 }
@@ -211,7 +222,7 @@ export function AdvancedScreen() {
   const facts: { icon: React.ComponentProps<typeof Feather>["name"]; title: string; body: string }[] = [
     { icon: "smartphone", title: "Your money lives on this phone", body: `Not with ${BRAND.name}, not with a bank. Nobody can freeze it or spend it but you.` },
     { icon: "lock", title: "Swaps can't run off with it", body: "When you cash out, your bitcoin is locked, not sent. It only moves once you have the cash, or it comes back to you." },
-    { icon: "globe", title: "No company in the middle", body: "Agents and customers meet on Nostr, an open network. No account, no sign-up, no server of ours." },
+    { icon: "globe", title: "No company in the middle", body: "Agents and customers meet on an open network. No account, no sign-up, no server of ours." },
   ];
   return (
     <Screen back title="Your keys, your money">
@@ -237,7 +248,7 @@ export function AdvancedScreen() {
           <Divider />
           <Row icon="key" title="Your ID" subtitle={`${npub(keys.identity.pk).slice(0, 18)}…`} chevron onPress={() => nav.navigate("Identity")} />
           <Divider />
-          <Row icon="radio" title="Relays" subtitle="Where offers, swaps and messages travel" chevron onPress={() => nav.navigate("Relays")} />
+          <Row icon="radio" title="Network" subtitle="Where offers, swaps and messages travel" chevron onPress={() => nav.navigate("Relays")} />
           <Divider />
           <Row icon="map-pin" title="Browse agents" subtitle="Every agent online for your currency" chevron onPress={() => nav.navigate("Agents")} />
         </Card>
@@ -245,9 +256,9 @@ export function AdvancedScreen() {
 
       <Section title="Under the hood">
         <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-          <Row icon="book-open" title="Pontmore protocol" subtitle="PIP-00, PIP-01, PIP-02 · pontmore/swap@1" chevron onPress={() => void Linking.openURL("https://github.com/pontmore/protocol")} />
+          <Row icon="book-open" title="How swaps work" subtitle="The open rules every swap follows" chevron onPress={() => void Linking.openURL("https://github.com/pontmore/protocol")} />
           <Divider />
-          <Row icon="zap" title="Wallet" subtitle={`Breez Spark · ${BREEZ_NETWORK} · Lightning, Spark and on-chain`} />
+          <Row icon="zap" title="Wallet" subtitle={BREEZ_NETWORK === "mainnet" ? "Only you hold the keys" : `Only you hold the keys · ${BREEZ_NETWORK}`} />
           <Divider />
           <Row icon="cpu" title="Version" subtitle={Constants.expoConfig?.version ?? "dev"} />
         </Card>
@@ -266,7 +277,7 @@ export function IdentityScreen() {
       <Text muted>
         Your ID comes from your 12 words, so restoring your wallet brings it back. Agent mode uses two more keys, also made from your words.
       </Text>
-      <CopyField value={npub(keys.identity.pk)} label="Your npub" />
+      <CopyField value={npub(keys.identity.pk)} label="Your ID" />
       <CopyField value={npub(keys.escrow.pk)} label="Escrow key (agent mode)" short />
       <CopyField value={npub(keys.resolver.pk)} label="Resolver key (agent mode)" short />
       <Notice tone="info">The escrow key signs your agent's locks, payouts and refunds. The resolver key signs decisions on disputes.</Notice>
@@ -283,18 +294,18 @@ export function RelaysScreen() {
   return (
     <Screen
       back
-      title="Relays"
+      title="Network"
       footer={
         <Button
           title="Save"
           onPress={() => {
             setRelays(list);
-            toast("Relays saved. Restart the app to reconnect everything.", "success");
+            toast("Saved. Restart the app to reconnect.", "success");
           }}
         />
       }
     >
-      <Text muted>Your offers, swaps and private messages are published to these relays. Both sides of a swap need at least one in common.</Text>
+      <Text muted>Your offers, swaps and private messages travel through these servers. Both sides of a swap need at least one in common.</Text>
       <Card style={{ paddingVertical: space.sm, gap: 0 }}>
         {list.map((r) => (
           <Row
@@ -310,7 +321,7 @@ export function RelaysScreen() {
       <Field value={input} onChangeText={setInput} placeholder="wss://relay.example.com" autoCapitalize="none" autoCorrect={false} />
       <Button
         kind="secondary"
-        title="Add relay"
+        title="Add server"
         disabled={!/^wss:\/\/[^\s]+\.[^\s]+$/.test(input.trim())}
         onPress={() => {
           setList([...new Set([...list, input.trim()])]);

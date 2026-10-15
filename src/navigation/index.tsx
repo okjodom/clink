@@ -78,7 +78,6 @@ function Tabs() {
         <>
           <Tab.Screen name="Desk" component={DeskScreen} options={{ tabBarIcon: icon("briefcase"), ...badge }} />
           <Tab.Screen name="Wallet" component={HomeScreen} options={{ tabBarIcon: icon("credit-card") }} />
-          <Tab.Screen name="Swaps" component={ActivityScreen} options={{ tabBarIcon: icon("repeat") }} />
           <Tab.Screen name="Me" component={MeScreen} options={{ tabBarIcon: icon("user") }} />
         </>
       ) : (
@@ -127,6 +126,7 @@ export function RootNavigator() {
             <Stack.Screen name="Send" component={SendScreen} />
             <Stack.Screen name="Scan" component={ScanScreen} options={{ presentation: "fullScreenModal", animation: "fade" }} />
             <Stack.Screen name="Transactions" component={TransactionsScreen} />
+            <Stack.Screen name="Swaps" component={ActivityScreen} />
             <Stack.Screen name="Backup" component={BackupScreen} />
             <Stack.Screen name="NewSwap" component={NewSwapScreen} />
             <Stack.Screen name="ReviewSwap" component={ReviewSwapScreen} />

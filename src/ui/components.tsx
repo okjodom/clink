@@ -89,17 +89,21 @@ export function Screen({
   const body = (
     <View style={[padded && { paddingHorizontal: space.lg }, { gap: space.lg, paddingBottom: scroll ? space.xl : space.sm }, !scroll && { flex: 1 }, style]}>
       {large && title ? (
-        <Text variant="display" style={{ marginTop: space.sm }}>
-          {title}
-        </Text>
+        // A large title carries its own action beside it, so there's no bar above.
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginTop: space.sm }}>
+          <Text variant="display" style={{ flexShrink: 1 }}>
+            {title}
+          </Text>
+          {!back && right}
+        </View>
       ) : null}
       {children}
     </View>
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
-      {(back || (title && !large) || right) && <Header title={large ? undefined : title} back={back} right={right} />}
-      {!back && !right && large && <View style={{ height: space.sm }} />}
+      {(back || (title && !large) || (right && !large)) && <Header title={large ? undefined : title} back={back} right={right} />}
+      {!back && large && <View style={{ height: space.sm }} />}
       {scroll ? (
         <ScrollView
           keyboardShouldPersistTaps="handled"

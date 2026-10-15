@@ -11,8 +11,9 @@ import { escrowPkOf } from "../protocol/offer";
 import { completedSwaps, type AgentListing } from "../services/discovery";
 import { useDiscovery } from "../store/discovery";
 import { useSession } from "../store/session";
+import { useWallet } from "../store/wallet";
 import { Avatar, Badge, Button, Card, Chip, Empty, Field, IconButton, Notice, Screen, Spinner, Text } from "../ui/components";
-import { QR, Sheet } from "../ui/extras";
+import { QR, QrShareSheet, Sheet } from "../ui/extras";
 import { KeyValue } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
 
@@ -83,6 +84,7 @@ export function DiscoverScreen() {
 function AgentCard({ listing, currency, onPress }: { listing: AgentListing; currency: string; onPress: () => void }) {
   const c = useColors();
   const offer = listing.markets.find((m) => m.currency === currency) ?? listing.markets[0];
+  const rate = useWallet((s) => s.rates[offer.currency]);
   return (
     <Card onPress={onPress}>
       <View style={{ flexDirection: "row", gap: space.md, alignItems: "center" }}>
@@ -98,8 +100,8 @@ function AgentCard({ listing, currency, onPress }: { listing: AgentListing; curr
         <Badge label="Online" tone="success" />
       </View>
       <View style={{ flexDirection: "row", gap: space.md }}>
-        <PriceBox label="Buy" price={offer.buy?.price} currency={offer.currency} color={c.primaryInk} />
-        <PriceBox label="Sell" price={offer.sell?.price} currency={offer.currency} color={c.accent} />
+        <FeeBox label="Add money" pct={feePct(offer.buy?.price, rate, 1)} color={c.primaryInk} />
+        <FeeBox label="Cash out" pct={feePct(offer.sell?.price, rate, -1)} color={c.accent} />
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {offer.channels.map((ch) => (
@@ -110,7 +112,20 @@ function AgentCard({ listing, currency, onPress }: { listing: AgentListing; curr
   );
 }
 
-function PriceBox({ label, price, currency, color }: { label: string; price?: string; currency: string; color: string }) {
+/**
+ * An agent's price as the fee it is: how far above (adding money) or below
+ * (cashing out) the market rate. Null when they don't offer it or there's no rate.
+ */
+function feePct(price: string | undefined, market: number | undefined, side: 1 | -1): number | null {
+  if (!price || !market) return null;
+  return Math.max(0, side * (Number(price) / market - 1) * 100);
+}
+
+function feeText(pct: number | null): string {
+  return pct === null ? "—" : `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}% fee`;
+}
+
+function FeeBox({ label, pct, color }: { label: string; pct: number | null; color: string }) {
   const c = useColors();
   return (
     <View style={{ flex: 1, backgroundColor: c.surfaceAlt, borderRadius: 12, padding: space.md, gap: 2 }}>
@@ -118,10 +133,7 @@ function PriceBox({ label, price, currency, color }: { label: string; price?: st
         {label.toUpperCase()}
       </Text>
       <Text variant="label" numberOfLines={1}>
-        {price ? `${currency} ${formatDecimal(price, 0)}` : "—"}
-      </Text>
-      <Text variant="caption" faint>
-        per BTC
+        {feeText(pct)}
       </Text>
     </View>
   );
@@ -133,6 +145,7 @@ export function AgentProfileScreen() {
   const raw: string = route.params.pk;
   const pk = parseAgentLink(raw) ?? raw;
   const me = useSession((s) => s.keys?.identity.pk);
+  const rates = useWallet((s) => s.rates);
   const { agents, loadAgent } = useDiscovery();
   const [loading, setLoading] = useState(!agents[pk]);
   const [done, setDone] = useState<number | null>(null);
@@ -177,10 +190,8 @@ export function AgentProfileScreen() {
           <Text variant="heading">
             {currencyInfo(o.currency).flag} {o.currency}
           </Text>
-          {o.buy && <KeyValue label="Sells you bitcoin at" value={`${o.currency} ${formatDecimal(o.buy.price, 0)}/BTC`} />}
-          {o.buy && <KeyValue label="Buy limits" value={`${o.currency} ${formatDecimal(o.buy.min)} – ${formatDecimal(o.buy.max)}`} />}
-          {o.sell && <KeyValue label="Buys your bitcoin at" value={`${o.currency} ${formatDecimal(o.sell.price, 0)}/BTC`} />}
-          {o.sell && <KeyValue label="Sell limits" value={`${o.currency} ${formatDecimal(o.sell.min)} – ${formatDecimal(o.sell.max)}`} />}
+          {o.buy && <KeyValue label="Add money" value={`${feeText(feePct(o.buy.price, rates[o.currency], 1))} · ${o.currency} ${formatDecimal(o.buy.min)}–${formatDecimal(o.buy.max)}`} />}
+          {o.sell && <KeyValue label="Cash out" value={`${feeText(feePct(o.sell.price, rates[o.currency], -1))} · ${o.currency} ${formatDecimal(o.sell.min)}–${formatDecimal(o.sell.max)}`} />}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
             {o.channels.map((ch) => (
               <Badge key={ch} label={channelInfo(ch).label} />
@@ -189,10 +200,10 @@ export function AgentProfileScreen() {
           {!self && (
             <View style={{ flexDirection: "row", gap: space.sm }}>
               {o.buy && (
-                <Button style={{ flex: 1 }} small title="Buy" icon="plus" onPress={() => nav.navigate("NewSwap", { agentPk: pk, direction: "fiat_to_btc", currency: o.currency })} />
+                <Button style={{ flex: 1 }} small title="Add money" icon="plus" onPress={() => nav.navigate("NewSwap", { agentPk: pk, direction: "fiat_to_btc", currency: o.currency })} />
               )}
               {o.sell && (
-                <Button style={{ flex: 1 }} small kind="secondary" title="Sell" icon="minus" onPress={() => nav.navigate("NewSwap", { agentPk: pk, direction: "btc_to_fiat", currency: o.currency })} />
+                <Button style={{ flex: 1 }} small kind="secondary" title="Cash out" icon="minus" onPress={() => nav.navigate("NewSwap", { agentPk: pk, direction: "btc_to_fiat", currency: o.currency })} />
               )}
             </View>
           )}
@@ -210,14 +221,14 @@ export function AgentProfileScreen() {
 }
 
 export function AgentShareSheet({ pk, name, visible, onClose }: { pk: string; name?: string; visible: boolean; onClose: () => void }) {
-  const link = agentLink(pk);
   return (
-    <Sheet visible={visible} onClose={onClose} title={name ?? "Agent link"}>
-      <Text variant="caption" muted>
-        Scan to add money or cash out with {name ?? "this agent"}. Print it for your shop or share it in your groups.
-      </Text>
-      <QR value={link} size={200} />
-      <Button title="Share link" icon="share" onPress={() => void Share.share({ message: `Add money or cash out with ${name ?? "me"} on ${BRAND.name}: ${link}` })} />
-    </Sheet>
+    <QrShareSheet
+      visible={visible}
+      onClose={onClose}
+      title={name ?? "Your desk"}
+      caption={`Customers scan this to add money or cash out with ${name ?? "you"}. Save it to print for your shop.`}
+      value={agentLink(pk)}
+      fileName={`${name ?? "agent"}-desk`}
+    />
   );
 }

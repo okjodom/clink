@@ -744,7 +744,10 @@ export async function payHoldInvoice(params: {
   const invoice = method.inner.invoiceDetails;
   if (invoice.paymentHash !== params.paymentHash) throw new Error("The lock invoice is for a different payment hash");
   if (BigInt(invoice.amountMsat ?? 0n) !== params.amountSats * 1000n) throw new Error("The lock invoice is for the wrong amount");
-  const res = await s.sendPayment({ prepareResponse: prepared, options: undefined, idempotencyKey: idempotencyUuid(params.idempotencySeed) });
+  // Paying out of dollars converts first, and a converting payment can't carry an
+  // idempotency key; the caller guards against paying twice instead (see lockAndSecure).
+  const viaDollars = !!prepared.conversionEstimate;
+  const res = await s.sendPayment({ prepareResponse: prepared, options: undefined, idempotencyKey: viaDollars ? undefined : idempotencyUuid(params.idempotencySeed) });
   return withHtlc(res.payment);
 }
 

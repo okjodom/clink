@@ -31,6 +31,7 @@ import {
   type PrivateTerms,
 } from "../protocol/payloads";
 import {
+  acceptedAt,
   bitcoinProvider,
   fiatReceiver,
   fiatSender,
@@ -281,12 +282,12 @@ export async function verifyIncomingLock(id: string): Promise<LockCheck> {
   const rec = record(id);
   const st = swapState(rec);
   const locked = payloadFrom(rec, bitcoinProvider(st.root), "locked");
-  if (!locked) return { ok: false, reason: "Waiting for the bitcoin to be locked" };
+  if (!locked) return { ok: false, reason: "Waiting for the money to be set aside" };
   const expected = announcedHash(rec, st);
   if (!expected || locked.payment_hash !== expected) return { ok: false, reason: "Lock does not match the announced payment hash" };
   if (!useSwaps.getState().bindPayment(id, expected)) return { ok: false, reason: "Payment hash is already bound to another swap" };
   const tx = await wallet.findHtlc(expected, "in");
-  if (!tx) return { ok: false, reason: "The lock hasn't reached your wallet yet" };
+  if (!tx) return { ok: false, reason: "It hasn't reached your wallet yet" };
   if (tx.htlc?.paymentHash !== expected) return { ok: false, reason: "Wallet payment hash does not match", tx };
   if (tx.amountSats < BigInt(st.root.terms.bitcoin.amount)) return { ok: false, reason: "Locked amount is too small", tx };
   if (tx.htlc?.status !== "waiting" && !(tx.htlc?.status === "released" && rec.local.claimedAt))
@@ -377,7 +378,14 @@ async function duty(id: string): Promise<boolean> {
         await sendAcceptDetails(id);
         return true;
       }
-      if (direction === "fiat_to_btc") return lockAndSecure(id);
+      if (direction === "fiat_to_btc") {
+        // The customer's phone never answered: nothing is set aside, so let the request go.
+        if (customerWentQuiet(rec, st, t)) {
+          await cancelSwap(id);
+          return true;
+        }
+        return lockAndSecure(id);
+      }
       // btc_to_fiat: the customer locks into our hold invoice; our escrow key attests once verified.
       if (await sendInvoice(id)) return true;
       const check = await verifyIncomingLock(id);
@@ -513,6 +521,17 @@ async function sendInvoice(id: string): Promise<boolean> {
   return true;
 }
 
+/** How long a started lock gets to show up in the wallet before it's tried again. */
+const LOCK_SETTLE_SECS = 5 * 60;
+
+/** Cancel a request the customer stopped answering, as long as nothing was set aside. */
+const RELEASE_QUIET_AFTER_SECS = 10 * 60;
+
+function customerWentQuiet(rec: SwapRecord, st: SwapState, t: number): boolean {
+  if (sentByMe(rec, "locked") || rec.local.lockStartedAt || payloadFrom(rec, st.root.customer, "invoice")) return false;
+  return t - (acceptedAt(st) ?? st.root.createdAt) > RELEASE_QUIET_AFTER_SECS;
+}
+
 /** Bitcoin provider: pay the recipient's hold invoice (idempotently), announce it, and — for the agent — secure. */
 async function lockAndSecure(id: string): Promise<boolean> {
   const ring = k();
@@ -527,6 +546,10 @@ async function lockAndSecure(id: string): Promise<boolean> {
 
   if (!sentByMe(rec, "locked")) {
     let tx = await wallet.findHtlc(hash, "out");
+    // A lock we started may still be on its way (paying from dollars converts first, and
+    // such payments can't be deduplicated by the wallet): wait for it rather than pay twice.
+    const started = rec.local.lockStartedAt;
+    if (!tx && started && now() - started < LOCK_SETTLE_SECS) return false;
     if (!tx || tx.htlc?.status === "returned") {
       if (now() > root.terms.deadlines.fiat_pay_by - MIN_PAY_TIME) {
         throw new Error("Too close to the payment deadline to lock bitcoin safely");
@@ -535,7 +558,13 @@ async function lockAndSecure(id: string): Promise<boolean> {
       const invoice = payloadFrom(rec, recipient, "invoice");
       if (!invoice) return false;
       useSwaps.getState().patchLocal(id, { lockStartedAt: now() });
-      tx = await wallet.payHoldInvoice({ bolt11: invoice.bolt11, amountSats: amount, paymentHash: hash, idempotencySeed: `pontmore/lock/${id}` });
+      try {
+        tx = await wallet.payHoldInvoice({ bolt11: invoice.bolt11, amountSats: amount, paymentHash: hash, idempotencySeed: `pontmore/lock/${id}` });
+      } catch (e) {
+        // Refused outright, nothing left the wallet: the next try needn't wait.
+        if (!(await wallet.findHtlc(hash, "out").catch(() => null))) useSwaps.getState().patchLocal(id, { lockStartedAt: undefined });
+        throw e;
+      }
       void useWallet.getState().refresh();
     }
     if (tx.htlc?.paymentHash !== hash || !useSwaps.getState().bindPayment(id, hash, tx.id)) throw new Error("Lock payment does not belong to this swap");
@@ -596,7 +625,7 @@ async function validateRequest(rec: SwapRecord, quoteBytes: string, privateTerms
     } catch (e) {
       return { problems, unsure: `Couldn't read the wallet balance: ${(e as Error).message}` };
     }
-    if (balance < BigInt(root.terms.bitcoin.amount)) problems.push("Not enough bitcoin to cover this swap");
+    if (balance < BigInt(root.terms.bitcoin.amount)) problems.push("Not enough float to cover this swap");
   } else if (!terms?.payout || terms.payout.channel !== root.terms.payment_channel || !detailsComplete(terms.payout.channel, terms.payout.details)) {
     problems.push("Customer payout details are missing");
   }

@@ -1,28 +1,34 @@
 /**
  * Plain-language presentation of a swap for whoever is holding the phone.
  */
+import { BRAND } from "../brand";
 import { channelInfo } from "./channels";
 import { formatDecimal, formatSats } from "./money";
-import type { SwapRecord } from "../store/swaps";
-import { fiatSender, type SwapState } from "../protocol/swap";
+import { payloadFrom, type SwapRecord } from "../store/swaps";
+import { acceptedAt, bitcoinProvider, counterpartyOf, fiatSender, type SwapState } from "../protocol/swap";
 import type { Tone } from "../ui/components";
 
-export const STEPS = ["Requested", "Accepted", "Secured", "Payment sent", "Payment confirmed", "Complete"];
+/** What people track: someone took it, the money was paid, it's done. */
+export const STEPS = ["Accepted", "Paid", "Done"];
 
+/** -1: not accepted yet. */
 const STEP_OF: Record<string, number> = {
-  proposed: 0,
-  accepted: 1,
-  secured: 2,
-  fiat_sent: 3,
-  fiat_confirmed: 4,
-  settlement_authorized: 4,
-  refund_authorized: 2,
-  settled: 5,
-  refunded: 5,
-  declined: 0,
-  cancelled: 1,
-  expired: 0,
+  proposed: -1,
+  accepted: 0,
+  secured: 0,
+  fiat_sent: 1,
+  fiat_confirmed: 1,
+  settlement_authorized: 1,
+  refund_authorized: 0,
+  settled: 2,
+  refunded: 2,
+  declined: -1,
+  cancelled: 0,
+  expired: -1,
 };
+
+/** After this long without a word from the other phone, say so plainly. */
+export const QUIET_AFTER_SECS = 3 * 60;
 
 export type MyAction = "accept" | "pay" | "confirm" | "resolve" | null;
 
@@ -53,13 +59,8 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
   const channel = channelInfo(root.terms.payment_channel).short;
   const cash = channelInfo(root.terms.payment_channel).fields.length === 0;
   const them = rec.local.counterpartyName || (isAgent ? "the customer" : "the agent");
-  const title = isAgent
-    ? buying
-      ? `Sell ${sats} for ${fiat}`
-      : `Buy ${sats} for ${fiat}`
-    : buying
-      ? `Add ${fiat}`
-      : `Cash out ${fiat}`;
+  // Named by what the customer is doing, on both phones.
+  const title = isAgent ? (buying ? `Add money · ${fiat}` : `Cash out · ${fiat}`) : buying ? `Add ${fiat}` : `Cash out ${fiat}`;
 
   const v = (headline: string, detail: string, tone: Tone, myTurn = false, action: MyAction = null): SwapView => ({
     title,
@@ -98,14 +99,24 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
         return v("New request", `${fiat} via ${channel}. Accept to start.`, "accent", true, "accept");
       }
       return now - root.createdAt < 90
-        ? v(`Waiting for ${them}`, "Agents usually reply within a minute.", "info")
+        ? v(`Waiting for ${them}`, `Agents usually reply within a minute. Keep ${BRAND.name} open until they do.`, "info")
         : v(`Waiting for ${them}`, `${capital(them)} hasn't replied yet. You can cancel any time before they accept.`, "info");
-    case "accepted":
-      if (iPayFiat) return v("Locking bitcoin", `${capital(them)} is locking ${sats} for you.`, "info");
-      return v("Locking your bitcoin", `Your ${sats} are being locked so ${them} can pay safely.`, "info");
+    case "accepted": {
+      // Setting money aside needs one answer from the other phone first; say when that's what we wait on.
+      const iSetAside = bitcoinProvider(root) === me;
+      const theyAnswered = !!payloadFrom(rec, counterpartyOf(root, me), "invoice");
+      if (iSetAside && !theyAnswered) {
+        const quiet = now - (acceptedAt(st) ?? root.createdAt) > QUIET_AFTER_SECS;
+        return quiet
+          ? v(`${capital(them)} isn't answering`, `Nothing is set aside yet. ${capital(them)} needs to open ${BRAND.name} to continue, or you can cancel.`, "warning")
+          : v(`Waiting for ${them}`, `${capital(them)} needs ${BRAND.name} open to continue. Nothing is set aside yet.`, "info");
+      }
+      if (iSetAside) return v("Setting your money aside", `Your ${sats} are being set aside so ${them} can pay safely.`, "info");
+      return v("Setting money aside", `${capital(them)} is setting aside ${sats} for you.`, "info");
+    }
     case "secured":
       if (iPayFiat) {
-        if (now >= root.terms.deadlines.fiat_pay_by) return v("Payment window closed", "The locked bitcoin will return to its owner.", "warning");
+        if (now >= root.terms.deadlines.fiat_pay_by) return v("Payment window closed", "The money set aside goes back to its owner.", "warning");
         return cash
           ? v(`Hand over ${fiat}`, `Give ${them} ${fiat} in cash, then tell us it's done.`, "accent", true, "pay")
           : v(`Send ${fiat}`, `Pay ${them} via ${channel}, then tell us it's done.`, "accent", true, "pay");
@@ -120,19 +131,19 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
         : v(`Check your ${channel}`, `${capital(them)} says they sent ${fiat}. Confirm only once it's in your account.`, "accent", true, "confirm");
     case "fiat_confirmed":
     case "settlement_authorized":
-      return v("Releasing bitcoin", iPayFiat ? `Your ${sats} are on the way.` : "Bitcoin is being released.", "info");
+      return v("Almost done", iPayFiat ? `Your ${sats} are on the way.` : "Sending the money.", "info");
     case "settled":
       return v("Done", iPayFiat ? `You got ${sats} for ${fiat}.` : `You got ${fiat} for ${sats}.`, "success");
     case "refund_authorized":
-      return v("Refunding", "The locked bitcoin goes back to its owner when the lock expires.", "warning");
+      return v("Refunding", "The money set aside goes back to its owner shortly.", "warning");
     case "refunded":
-      return v("Refunded", "The bitcoin went back to its owner.", "neutral");
+      return v("Refunded", "The money went back to its owner.", "neutral");
     case "declined":
       return v("Declined", isAgent ? "You declined this request." : `${capital(them)} couldn't take this swap. Nothing was charged.`, "neutral");
     case "cancelled": {
       const by = [...st.chain].reverse().find((a) => a.action === "core/cancel")?.signer;
       const who = by === me ? "You cancelled" : by ? `${capital(them)} cancelled` : "Cancelled";
-      return v("Cancelled", `${who} this swap. ${st.chain.some((a) => a.action === "core/secure") ? "Locked bitcoin goes back to its owner." : "Nothing was charged."}`, "neutral");
+      return v("Cancelled", `${who} this swap. ${st.chain.some((a) => a.action === "core/secure") ? "Money set aside goes back to its owner." : "Nothing was charged."}`, "neutral");
     }
     case "expired":
       return v("Expired", "Nobody accepted this request in time.", "neutral");

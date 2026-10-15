@@ -31,25 +31,25 @@ Clink is a mobile client for the [Pontmore protocol](https://github.com/pontmore
 
 ## Screens
 
-> These screenshots were taken before the Clink rebrand; the layout is the same, the colours and logo are not.
+### Personal mode: one balance, dollars or bitcoin, USDT/USDC in and out
 
-### Personal mode: hold, send, receive and swap
-
-<p align="center"><img src="docs/user-mode.png" alt="Wallet, receive, swap, currency picker and agent discovery screens" width="100%" /></p>
+<p align="center"><img src="docs/user-mode.png" alt="Wallet, receive, add money, get USDT or USDC, and the dollars or bitcoin choice" width="100%" /></p>
 
 ### Agent mode: run a swap desk from your phone
 
-<p align="center"><img src="docs/agent-mode.png" alt="Agent desk, profile, markets and margins, payment channels and mode switch screens" width="100%" /></p>
+<p align="center"><img src="docs/agent-mode.png" alt="Agent desk, your offer, more settings and a finished swap" width="100%" /></p>
 
 <details>
 <summary>All screenshots</summary>
 
 | | | | | |
 | --- | --- | --- | --- | --- |
-| <img src="docs/screenshots/01-home.png" width="160" alt="Wallet home"> | <img src="docs/screenshots/02-receive.png" width="160" alt="Receive with a Lightning invoice"> | <img src="docs/screenshots/03-swap.png" width="160" alt="Swap amount entry"> | <img src="docs/screenshots/04-currencies.png" width="160" alt="Currency picker"> | <img src="docs/screenshots/05-agents.png" width="160" alt="Agent discovery"> |
-| Wallet | Receive | Swap | Currencies | Agents |
-| <img src="docs/screenshots/06-me.png" width="160" alt="Settings and mode switch"> | <img src="docs/screenshots/07-desk.png" width="160" alt="Agent desk"> | <img src="docs/screenshots/08-agent-setup.png" width="160" alt="Agent setup"> | <img src="docs/screenshots/09-market.png" width="160" alt="Market channels and margins"> | <img src="docs/screenshots/10-channel.png" width="160" alt="Payment channel details"> |
-| Me | Agent desk | Agent setup | Markets | Channels |
+| <img src="docs/screenshots/01-home.png" width="160" alt="Wallet home: one balance, held in dollars"> | <img src="docs/screenshots/02-receive.png" width="160" alt="Receive with your username"> | <img src="docs/screenshots/03-add-money.png" width="160" alt="Add money from M-Pesa through an agent"> | <img src="docs/screenshots/04-stablecoin.png" width="160" alt="Get paid in USDT or USDC"> | <img src="docs/screenshots/05-hold-in.png" width="160" alt="Keep your money in dollars or bitcoin"> |
+| Wallet | Receive | Add money | USDT or USDC | Dollars or bitcoin |
+| <img src="docs/screenshots/06-me.png" width="160" alt="Me: username, earn as an agent, settings"> | <img src="docs/screenshots/07-desk.png" width="160" alt="Agent desk"> | <img src="docs/screenshots/08-offer.png" width="160" alt="Your offer"> | <img src="docs/screenshots/09-offer-more.png" width="160" alt="More offer settings"> | <img src="docs/screenshots/10-swap-done.png" width="160" alt="A finished swap"> |
+| Me | Agent desk | Your offer | More settings | Finished swap |
+
+Composites are built with `python3 scripts/compose-screenshots.py docs/user-mode.png "Wallet=docs/screenshots/01-home.png" …`.
 
 </details>
 

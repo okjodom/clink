@@ -107,6 +107,11 @@ export function fiatReceiver(root: SwapRoot): string {
 
 /** Bitcoin provider equals the fiat receiver in both directions. */
 export const bitcoinProvider = fiatReceiver;
+
+/** When the agent accepted, if it has. */
+export function acceptedAt(st: SwapState): number | undefined {
+  return st.chain.find((a) => a.action === "core/accept")?.createdAt;
+}
 export const bitcoinRecipient = fiatSender;
 
 export function counterpartyOf(root: SwapRoot, pk: string): string {

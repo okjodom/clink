@@ -66,14 +66,9 @@ export function Steps({ step, tone }: { step: number; tone: "danger" | string })
           />
         ))}
       </View>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text variant="caption" faint>
-          {STEPS[Math.min(step, STEPS.length - 1)]}
-        </Text>
-        <Text variant="caption" faint>
-          {Math.min(step + 1, STEPS.length)} of {STEPS.length}
-        </Text>
-      </View>
+      <Text variant="caption" faint>
+        {step < 0 ? "Waiting to be accepted" : STEPS[Math.min(step, STEPS.length - 1)]}
+      </Text>
     </View>
   );
 }
@@ -85,8 +80,8 @@ function useSwapOf(tx: WalletTx): { label: string; id?: string } | null {
   if (!prefix) return null;
   const who = rec?.local.counterpartyName;
   const added = tx.direction === "in";
-  // Agents trade bitcoin as a business; to customers it's just their money moving.
-  if (rec?.role === "agent") return { id: rec.id, label: who ? (added ? `Bought from ${who}` : `Sold to ${who}`) : added ? "Bought bitcoin" : "Sold bitcoin" };
+  // To an agent, money in means a customer cashed out with them, money out that one added money.
+  if (rec?.role === "agent") return { id: rec.id, label: added ? `Cash out${who ? ` for ${who}` : ""}` : `Add money${who ? ` for ${who}` : ""}` };
   return {
     id: rec?.id,
     label: who ? (added ? `Added via ${who}` : `Cashed out via ${who}`) : added ? "Added money" : "Cashed out",

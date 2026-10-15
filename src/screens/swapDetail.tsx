@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import React, { useEffect, useRef, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from "react-native";
 import type { Event } from "nostr-tools/pure";
@@ -28,8 +29,8 @@ const DISPUTE_LABELS: Record<DisputeClass, string> = {
   fiat_not_received: "I didn't receive the money",
   incorrect_fiat_amount: "Wrong amount was sent",
   payment_reference_invalid: "The payment reference is wrong",
-  escrow_not_secured: "The bitcoin was never locked",
-  bitcoin_not_released: "The bitcoin wasn't released",
+  escrow_not_secured: "The money was never set aside",
+  bitcoin_not_released: "The money wasn't released",
   conflicting_confirmation: "We disagree on what happened",
   timeout: "The other side stopped responding",
 };
@@ -39,7 +40,7 @@ const ACTION_LABELS: Record<string, string> = {
   "core/decline": "Declined",
   "core/cancel": "Cancelled",
   "core/expire": "Expired",
-  "core/secure": "Bitcoin locked",
+  "core/secure": "Money set aside",
   "swap/fiat_sent": "Payment marked sent",
   "swap/fiat_confirmed": "Payment confirmed",
   "core/authorize_settlement": "Release authorized",
@@ -58,6 +59,15 @@ function useCounterpartyName(id: string, pk: string | undefined, known?: string)
       .then((p) => p.name && patch(id, { counterpartyName: p.name }))
       .catch(() => undefined);
   }, [id, pk, known, patch]);
+}
+
+const KEEP_AWAKE_TAG = "swap-waiting";
+
+/** Wallet and network errors read like logs; people only need to know it's being handled. */
+function friendlyError(raw: string): string {
+  if (/balance|insufficient|not enough/i.test(raw)) return "There isn't enough in your balance for this right now.";
+  if (/network|timeout|connect|relay|offline/i.test(raw)) return "Can't reach the network. We'll keep trying.";
+  return "Something didn't go through. We'll keep trying.";
 }
 
 export function SwapDetailScreen() {
@@ -80,6 +90,13 @@ export function SwapDetailScreen() {
   // A question asked about the old state shouldn't be answerable in the new one.
   useEffect(() => dismissConfirm(), [status]);
   const iReceiveBtc = item ? bitcoinProvider(item.st.root) !== me : false;
+  // While a customer waits on the agent, keep this phone awake so the swap never stalls on it.
+  const waitingOnAgent = item?.rec.role === "customer" && !item.st.disputed && ["proposed", "accepted", "secured"].includes(status ?? "");
+  useEffect(() => {
+    if (!waitingOnAgent) return;
+    void activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);
+    return () => void deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
+  }, [waitingOnAgent]);
   useEffect(() => {
     if (!item || !iReceiveBtc || !["secured", "fiat_sent", "fiat_confirmed", "settlement_authorized"].includes(status ?? "")) return;
     let alive = true;
@@ -120,6 +137,12 @@ export function SwapDetailScreen() {
     }
   })();
   const them = rec.local.counterpartyName || (isAgent ? "Customer" : "Agent");
+  // The agent signs some steps with dedicated keys; people only need to know it was the agent.
+  const signedBy = (pk: string) => {
+    const agentSide = pk === root.escrow || pk === root.resolver || pk === root.agent;
+    if (agentSide) return isAgent ? "you" : them;
+    return pk === me ? "you" : them;
+  };
   const unread = unreadCount(rec, me);
   const iPayFiat = fiatSender(root) === me;
   const iReceiveFiat = fiatReceiver(root) === me;
@@ -206,11 +229,11 @@ export function SwapDetailScreen() {
               message: ch.fields.length
                 ? `Only continue once ${view.fiatLabel} is in your ${ch.short} account. Releasing can't be undone.`
                 : `Only continue once you have the ${view.fiatLabel} in hand. Releasing can't be undone.`,
-              confirmLabel: "Release bitcoin",
+              confirmLabel: "Release the money",
               cancelLabel: "Not yet",
               icon: "unlock",
             });
-            if (ok) void run("confirm", () => engine.confirmAndRelease(id), "Bitcoin released");
+            if (ok) void run("confirm", () => engine.confirmAndRelease(id), "Money released");
           }}
         />
       );
@@ -252,8 +275,8 @@ export function SwapDetailScreen() {
           />
         ) : (
           <>
-            <Text variant="display">{checkingLock ? "Checking the lock" : view.headline}</Text>
-            <Text muted>{checkingLock ? `Making sure ${view.satsLabel} are locked for you before you pay.` : view.detail}</Text>
+            <Text variant="display">{checkingLock ? "Checking" : view.headline}</Text>
+            <Text muted>{checkingLock ? `Making sure ${view.satsLabel} are set aside for you before you pay.` : view.detail}</Text>
           </>
         )}
         {!["declined", "cancelled", "expired", "settled"].includes(st.status) && <Steps step={iReceiveBtc && st.status === "secured" && !lock?.ok ? Math.min(view.step, 1) : view.step} tone={view.tone === "danger" ? "danger" : "ok"} />}
@@ -268,8 +291,8 @@ export function SwapDetailScreen() {
       </View>
 
       {rec.local.lastError && !view.done && (
-        <Notice tone="warning" title="Retrying" action={<Button small kind="secondary" title="Retry now" onPress={() => engine.schedule(id)} />}>
-          {rec.local.lastError}
+        <Notice tone="warning" title="Trying again" action={<Button small kind="secondary" title="Try now" onPress={() => engine.schedule(id)} />}>
+          {friendlyError(rec.local.lastError)}
         </Notice>
       )}
 
@@ -290,9 +313,9 @@ export function SwapDetailScreen() {
         <Card tone={lock?.ok ? "primary" : "alt"} style={{ flexDirection: "row", alignItems: "center" }}>
           <Feather name={lock?.ok ? "lock" : "loader"} size={20} color={lock?.ok ? c.primaryInk : c.textMuted} />
           <View style={{ flex: 1 }}>
-            <Text variant="label">{lock?.ok ? `${view.satsLabel} locked for you` : "Checking the lock…"}</Text>
+            <Text variant="label">{lock?.ok ? `${view.satsLabel} set aside for you` : "Checking…"}</Text>
             <Text variant="caption" muted>
-              {lock?.ok ? "Verified in your own wallet. It unlocks when the payment is confirmed." : (lock?.reason ?? "Looking in your wallet")}
+              {lock?.ok ? "Checked in your own wallet. It's yours once the payment is confirmed." : (lock?.reason ?? "Looking in your wallet")}
             </Text>
           </View>
         </Card>
@@ -359,12 +382,12 @@ export function SwapDetailScreen() {
             <KeyValue
               key={a.id}
               label={ACTION_LABELS[a.action] ?? a.action}
-              value={`${a.signer === root.escrow ? "escrow" : a.signer === root.resolver ? "resolver" : a.signer === me ? "you" : them} · ${new Date(a.createdAt * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`}
+              value={`${signedBy(a.signer)} · ${new Date(a.createdAt * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`}
             />
           ))}
           {st.forked && <Notice tone="danger">Forked: {st.forkIds.length} competing actions.</Notice>}
-          <CopyField value={root.id} label="Coordination id" short />
-          <CopyField value={npub(counterparty!)} label={isAgent ? "Customer npub" : "Agent npub"} short />
+          <CopyField value={root.id} label="Swap ID" short />
+          <CopyField value={npub(counterparty!)} label={isAgent ? "Customer ID" : "Agent ID"} short />
         </Card>
       </Collapsible>
 
@@ -381,7 +404,7 @@ export function SwapDetailScreen() {
                 message:
                   st.status === "proposed"
                     ? `${them} won't be able to accept it.`
-                    : "The swap stops here. Any locked bitcoin goes back to its owner when the lock expires.",
+                    : "The swap stops here. Any money set aside goes back to its owner.",
                 confirmLabel: "Cancel swap",
                 cancelLabel: "Keep it",
                 tone: "danger",

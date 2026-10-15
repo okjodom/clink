@@ -3,7 +3,8 @@ import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
 import { ActivityIndicator, Pressable, View } from "react-native";
 
-import { useActiveSwaps, useBackupNudge, useMoney, useSwapList, type SwapItem } from "../hooks";
+import { useActiveSwaps, useBackupNudge, useMe, useMoney, useNow, useSwapList, type SwapItem } from "../hooks";
+import { describeSwap } from "../lib/swapView";
 import { formatSats } from "../lib/money";
 import { formatUsd } from "../lib/stablecoins";
 import type { HoldIn } from "../services/wallet";
@@ -81,6 +82,28 @@ export function WalletHero() {
       </View>
       <HoldInSheet visible={holdOpen} onClose={() => setHoldOpen(false)} />
     </View>
+  );
+}
+
+/** The one swap waiting on you, front and centre, so coming back to the app picks up where it left off. */
+function YourTurn({ items }: { items: SwapItem[] }) {
+  const nav = useNavigation<any>();
+  const c = useColors();
+  const me = useMe();
+  const now = useNow(15000);
+  const next = items.map((i) => ({ i, view: describeSwap(i.rec, i.st, me, now) })).find((x) => x.view.myTurn);
+  if (!next) return null;
+  return (
+    <Card tone="primary" onPress={() => nav.navigate("SwapDetail", { id: next.i.rec.id })} style={{ flexDirection: "row", alignItems: "center" }}>
+      <Feather name="bell" size={22} color={c.primaryInk} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="label">{next.view.headline}</Text>
+        <Text variant="caption" muted numberOfLines={2}>
+          {next.view.detail}
+        </Text>
+      </View>
+      <Feather name="chevron-right" size={18} color={c.textMuted} />
+    </Card>
   );
 }
 
@@ -203,6 +226,8 @@ export function HomeScreen() {
           </Card>
         </View>
       )}
+
+      <YourTurn items={active} />
 
       {active.length > 0 && (
         <Section title="In progress">
