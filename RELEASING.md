@@ -34,8 +34,11 @@ do not hand-edit versions, tags, release notes or changelog entries.
    whose key password is the store password, so there is no separate secret
    for it. Delete `clink-upload.keystore.b64` once the secret is set.
 
-   The release job refuses to build if any of them is missing, and refuses to
-   publish a debug-signed APK.
+   Copy the entire Breez API key: it is a base64-encoded X.509 certificate.
+   The build validates its format and dates before compiling. Both fresh and
+   reused APKs are checked again for a complete, valid bundled certificate
+   before publication, so an artifact built with a truncated key cannot ship.
+   The release job also refuses missing secrets and debug-signed APKs.
 
 The Breez API key ends up inside the APK, like any `EXPO_PUBLIC_*` value. It
 identifies the app to Breez; it is not a wallet secret.
