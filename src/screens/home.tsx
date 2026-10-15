@@ -1,17 +1,18 @@
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { ActivityIndicator, Keyboard, Pressable, View } from "react-native";
 
-import { useActiveSwaps, useBackupNudge, useMe, useMoney, useNow, useSwapList, type SwapItem } from "../hooks";
+import { useActiveSwaps, useBackupNudge, useMe, useMoney, useNow, type SwapItem } from "../hooks";
+import { ACTIVITY_FILTERS, matchesActivityFilter, matchesActivitySearch, paymentCategory, paymentLabel, swapPaymentPrefix, type ActivityFilter } from "../lib/activity";
 import { describeSwap } from "../lib/swapView";
 import { formatSats } from "../lib/money";
 import { formatUsd } from "../lib/stablecoins";
 import type { HoldIn } from "../services/wallet";
-import { isTerminal } from "../protocol/swap";
 import { useSession } from "../store/session";
+import { useSwaps } from "../store/swaps";
 import { useWallet } from "../store/wallet";
-import { ActionTile, Button, Card, Collapsible, Empty, Notice, Screen, Section, Spinner, Text, success, tap } from "../ui/components";
+import { ActionTile, Button, Card, Empty, Field, IconButton, Notice, Row, Screen, Section, Spinner, Text, success, tap } from "../ui/components";
 import { Sheet, toast, toastError } from "../ui/extras";
 import { SwapRow, TxRow } from "../ui/rows";
 import { radius, space, useColors } from "../ui/theme";
@@ -267,15 +268,36 @@ export function HomeScreen() {
   );
 }
 
-/** Everything that moved: swaps in progress, payments, then finished swaps. */
+/** Payments appear once, with filters and a separate section for swaps still in progress. */
 export function TransactionsScreen() {
   const { txs, refresh } = useWallet();
+  const money = useMoney();
+  const me = useMe();
+  const now = useNow(15000);
+  const c = useColors();
   const hide = useSession((s) => s.hideBalance);
   const mode = useSession((s) => s.mode);
-  const swaps = useSwapList((i) => mode === "agent" || i.rec.role === "customer");
+  const records = useSwaps((s) => s.records);
   const active = useActiveSwaps(mode === "agent" ? undefined : "customer");
-  const activeIds = new Set(active.map((i) => i.rec.id));
-  const past: SwapItem[] = swaps.filter((i) => !activeIds.has(i.rec.id) && isTerminal(i.st));
+  const [filter, setFilter] = useState<ActivityFilter>("all");
+  const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const byPrefix = new Map(Object.values(records).map((rec) => [rec.id.slice(0, 8), rec]));
+  const shownTxs = txs.filter((tx) => {
+    const rec = byPrefix.get(swapPaymentPrefix(tx) ?? "");
+    const category = paymentCategory(tx, rec?.role);
+    return matchesActivityFilter(filter, category, tx.status === "pending") && matchesActivitySearch(search, [
+      paymentLabel(tx, rec?.role, rec?.local.counterpartyName),
+      ACTIVITY_FILTERS.find((option) => option.value === category)?.label,
+      tx.recipient, tx.description, tx.network, tx.statusLabel, tx.status,
+      money.primary(tx.amountSats), new Date(tx.timestamp * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    ]);
+  });
+  const shownActive = active.filter((i) => {
+    const view = describeSwap(i.rec, i.st, me, now);
+    return matchesActivityFilter(filter, i.st.root.terms.direction === "fiat_to_btc" ? "add-money" : "cash-out", true)
+      && matchesActivitySearch(search, [view.title, view.headline, i.rec.local.counterpartyName, "pending"]);
+  });
   const [refreshing, setRefreshing] = useState(false);
   return (
     <Screen
@@ -283,38 +305,54 @@ export function TransactionsScreen() {
       title="Activity"
       onRefresh={async () => {
         setRefreshing(true);
-        await refresh();
-        setRefreshing(false);
+        try {
+          await refresh();
+        } finally {
+          setRefreshing(false);
+        }
       }}
       refreshing={refreshing}
     >
-      {active.length > 0 && (
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+        <View style={{ flex: 1 }}>
+          <Field value={search} onChangeText={setSearch} placeholder="Search activity" accessibilityLabel="Search activity" autoCorrect={false} autoCapitalize="none" returnKeyType="search" style={{ paddingRight: 48 }} onSubmitEditing={() => Keyboard.dismiss()} />
+          {search.length > 0 && (
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch("")} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 44, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="x" size={18} color={c.textMuted} />
+            </Pressable>
+          )}
+        </View>
+        <IconButton name="filter" label={`Filter activity: ${ACTIVITY_FILTERS.find((option) => option.value === filter)?.label}`} onPress={() => { Keyboard.dismiss(); setFilterOpen(true); }} />
+      </View>
+      {filter !== "all" && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <Text variant="caption" muted style={{ flex: 1 }}>{ACTIVITY_FILTERS.find((option) => option.value === filter)?.label}</Text>
+          <Button small kind="ghost" title="Clear filter" onPress={() => setFilter("all")} />
+        </View>
+      )}
+      {shownActive.length > 0 && (
         <Section title="In progress">
           <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-            {active.map((i) => (
+            {shownActive.map((i) => (
               <SwapRow key={i.rec.id} item={i} />
             ))}
           </Card>
         </Section>
       )}
-      {txs.length === 0 ? (
-        <Empty icon="inbox" title="No payments yet" />
-      ) : (
+      {shownTxs.length === 0 && shownActive.length === 0 ? (
+        <Empty icon="inbox" title={filter === "all" && !search.trim() ? "No payments yet" : "No matching activity"} body={filter === "all" && !search.trim() ? undefined : "Try another search or filter."} />
+      ) : shownTxs.length > 0 ? (
         <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-          {txs.map((t) => (
+          {shownTxs.map((t) => (
             <TxRow key={t.id} tx={t} hidden={hide} />
           ))}
         </Card>
-      )}
-      {past.length > 0 && (
-        <Collapsible title="Past swaps" summary={`${past.length}`}>
-          <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-            {past.map((i) => (
-              <SwapRow key={i.rec.id} item={i} />
-            ))}
-          </Card>
-        </Collapsible>
-      )}
+      ) : null}
+      <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title="Filter activity">
+        {ACTIVITY_FILTERS.map((option) => (
+          <Row key={option.value} title={option.label} right={filter === option.value ? <Feather name="check" size={20} color={c.primaryInk} /> : undefined} onPress={() => { setFilter(option.value); setFilterOpen(false); }} />
+        ))}
+      </Sheet>
     </Screen>
   );
 }
