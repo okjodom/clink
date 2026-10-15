@@ -17,6 +17,7 @@ import { parsePrivateTerms } from "../protocol/payloads";
 import { bitcoinProvider, fiatReceiver, fiatSender } from "../protocol/swap";
 import { fetchProfile } from "../services/discovery";
 import * as engine from "../services/swapEngine";
+import { onWalletEvent } from "../services/wallet";
 import { chatOf, payloadFrom, unreadCount, useSwaps } from "../store/swaps";
 import { Avatar, Badge, Button, Card, Chip, Collapsible, Field, Header, Notice, Row, Screen, Section, Spinner, Text, success, toneColors } from "../ui/components";
 import { SwapCelebration } from "../ui/celebrate";
@@ -99,15 +100,25 @@ export function SwapDetailScreen() {
   useEffect(() => {
     if (!item || !iReceiveBtc || !["secured", "fiat_sent", "fiat_confirmed", "settlement_authorized"].includes(status ?? "")) return;
     let alive = true;
-    const check = () =>
-      engine
-        .verifyIncomingLock(id)
-        .then((r) => alive && setLock(r))
-        .catch(() => undefined);
+    let checking = false;
+    const check = async () => {
+      if (checking || !alive) return;
+      checking = true;
+      try {
+        const result = await engine.verifyIncomingLock(id);
+        if (alive) setLock(result);
+      } catch {
+        // A failed check never enables the payment action.
+      } finally {
+        checking = false;
+      }
+    };
     void check();
+    const unsubscribeWallet = onWalletEvent(() => void check());
     const t = setInterval(check, 15000);
     return () => {
       alive = false;
+      unsubscribeWallet();
       clearInterval(t);
     };
   }, [id, status, iReceiveBtc, item?.rec.inbox.length]);
@@ -277,6 +288,7 @@ export function SwapDetailScreen() {
             <Text muted>{checkingLock ? `Making sure ${view.satsLabel} are set aside for you before you pay.` : view.detail}</Text>
           </>
         )}
+        {!["declined", "cancelled", "expired", "settled"].includes(st.status) && <Steps step={iReceiveBtc && st.status === "secured" && !lock?.ok ? Math.min(view.step, 1) : view.step} tone={view.tone === "danger" ? "danger" : "ok"} />}
         {deadline && now < deadline.at && !st.disputed && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Feather name="clock" size={14} color={tone.fg} />
@@ -349,7 +361,6 @@ export function SwapDetailScreen() {
 
       <Collapsible title="Details" summary={`${view.fiatLabel} · ${formatSats(root.terms.bitcoin.amount)} · ${ch.short}`}>
         <Card>
-          <Steps step={view.step} tone={view.tone === "danger" ? "danger" : "ok"} />
           <Text variant="caption" muted>Bitcoin stays locked until the cash or account payment is confirmed.</Text>
           <KeyValue label="Amount" value={view.fiatLabel} />
           <KeyValue label="Bitcoin" value={formatSats(root.terms.bitcoin.amount)} />

@@ -112,8 +112,8 @@ function YourTurn({ items }: { items: SwapItem[] }) {
 }
 
 const HOLD_OPTIONS: { value: HoldIn; title: string; body: string; icon: React.ComponentProps<typeof Feather>["name"] }[] = [
-  { value: "dollars", title: "Dollars", body: "Stays steady. $10 today is $10 next month.", icon: "dollar-sign" },
-  { value: "bitcoin", title: "Bitcoin", body: "Goes up and down with bitcoin's price.", icon: "trending-up" },
+  { value: "dollars", title: "Dollars", body: "Steady dollar value", icon: "dollar-sign" },
+  { value: "bitcoin", title: "Bitcoin", body: "Value can rise or fall", icon: "trending-up" },
 ];
 
 /** One choice: keep the balance steady in dollars, or in bitcoin. */
@@ -147,7 +147,7 @@ function HoldInSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
             <View style={{ flex: 1, gap: 2 }}>
               <Text variant="label">{o.title}</Text>
               <Text variant="caption" muted>
-                {on && have ? `${o.body} You have ${have}.` : o.body}
+                {on && have ? `${o.body} · ${have}` : o.body}
               </Text>
             </View>
             {busy === o.value ? <ActivityIndicator color={c.primaryInk} /> : on ? <Feather name="check" size={20} color={c.primaryInk} /> : null}
@@ -155,7 +155,7 @@ function HoldInSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         );
       })}
       <Text variant="caption" muted center>
-        Switching moves what you have now. Sending, receiving and cashing out work the same either way.
+        Switching converts your available balance.
       </Text>
     </Sheet>
   );
