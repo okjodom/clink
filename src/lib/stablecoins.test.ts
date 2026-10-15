@@ -1,6 +1,20 @@
-import { assetLabel, chainLabel, chainOrder, formatUsd, fromBaseUnits, looksLikeStablecoinAddress, toBaseUnits } from "./stablecoins";
+import { assetLabel, chainLabel, chainOrder, formatUsd, fromBaseUnits, looksLikeStablecoinAddress, quoteExpiry, tokenAmount, toBaseUnits } from "./stablecoins";
 
 describe("toBaseUnits / fromBaseUnits", () => {
+  it("retains exact sub-cent receive amounts instead of rounding a deposit down", () => {
+    expect(tokenAmount(1_013_457n, 6)).toBe("1.013457");
+    expect(tokenAmount(1_000_000n, 6)).toBe("1");
+    expect(tokenAmount(1n, 18)).toBe("0.000000000000000001");
+  });
+  it("reads ISO send expiries and integer receive expiries and rejects invalid quotes", () => {
+    const iso = "2026-10-15T20:30:00Z";
+    const seconds = Date.parse(iso) / 1000;
+    expect(quoteExpiry(iso)).toBe(seconds);
+    expect(quoteExpiry(BigInt(seconds))).toBe(seconds);
+    expect(quoteExpiry(String(seconds))).toBe(seconds);
+    expect(() => quoteExpiry("invalid")).toThrow(/expiry/);
+    expect(() => quoteExpiry(0)).toThrow(/expiry/);
+  });
   it("converts dollars exactly, for 6 and 18 decimals", () => {
     expect(toBaseUnits("12.5", 6)).toBe(12_500_000n);
     expect(toBaseUnits("0.01", 6)).toBe(10_000n);

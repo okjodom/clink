@@ -41,9 +41,10 @@ import { BREEZ_API_KEY, BREEZ_NETWORK } from "./config";
 import { deleteSecret, getSecret, setSecret } from "./secure";
 import { isValidMnemonic, newMnemonic, normaliseMnemonic } from "../lib/keys";
 import { BRAND } from "../brand";
-import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBaseUnits, toBaseUnits } from "../lib/stablecoins";
+import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBaseUnits, quoteExpiry, tokenAmount, toBaseUnits } from "../lib/stablecoins";
 import { usernameFrom } from "../lib/username";
 import { paymentDescription, receiveDescription, refreshAddressBrand } from "../lib/paymentBrand";
+import { quotedFeeSats } from "../lib/sendFlow";
 
 export { usernameFrom };
 
@@ -541,7 +542,7 @@ export async function prepareSend(input: ParsedInput, amountSats?: bigint, comme
     conversionOptions: undefined,
     feePolicy: undefined,
   });
-  const fee = estimateFee(prepared.paymentMethod);
+  const fee = quotedFeeSats(prepared.paymentMethod);
   return {
     amountSats: BigInt(prepared.amount),
     feeSats: fee,
@@ -554,26 +555,6 @@ export async function prepareSend(input: ParsedInput, amountSats?: bigint, comme
       return toTx(res.payment);
     },
   };
-}
-
-/** Best-effort fee read from a prepared send; shapes differ per method. */
-function estimateFee(method: unknown): bigint {
-  const inner = (method as { inner?: Record<string, unknown> })?.inner ?? {};
-  const candidates = [
-    inner.sparkTransferFeeSats,
-    inner.lightningFeeSats,
-    inner.fee,
-    (inner.feeQuote as { speedMedium?: { userFeeSat?: bigint; l1BroadcastFeeSat?: bigint } } | undefined)?.speedMedium
-      ?.userFeeSat,
-  ];
-  for (const c of candidates) {
-    if (typeof c === "bigint") return c;
-    if (typeof c === "number") return BigInt(c);
-  }
-  const med = (inner.feeQuote as { speedMedium?: { userFeeSat?: bigint; l1BroadcastFeeSat?: bigint } } | undefined)
-    ?.speedMedium;
-  if (med) return BigInt(med.userFeeSat ?? 0n) + BigInt(med.l1BroadcastFeeSat ?? 0n);
-  return 0n;
 }
 
 // -- USDT / USDC on other chains ---------------------------------------------
@@ -631,6 +612,7 @@ export interface StablecoinRequest {
   depositAddress: string;
   /** What to ask the sender for, in dollars (fees are on top of what you get). */
   sendUsd: number;
+  sendAmount: string;
   expiresAt: number;
 }
 
@@ -656,7 +638,8 @@ export async function requestStablecoin(route: StableRoute, usd: string): Promis
     paymentRequest: res.paymentRequest,
     depositAddress: info.depositAddress,
     sendUsd: fromBaseUnits(BigInt(info.depositAmount), route.decimals),
-    expiresAt: Number(info.expiresAt),
+    sendAmount: tokenAmount(BigInt(info.depositAmount), route.decimals),
+    expiresAt: quoteExpiry(info.expiresAt),
   };
 }
 
@@ -669,7 +652,9 @@ export async function stablecoinSendRoutes(input: Extract<ParsedInput, { type: "
 export interface PreparedStablecoinSend {
   /** What the recipient should get, in dollars. */
   theyGetUsd: number;
+  theyGetAmount: string;
   feeUsd: number;
+  totalUsd: number;
   /** Paid from dollars when there are enough, otherwise from bitcoin. */
   from: "dollars" | "bitcoin";
   expiresAt: number;
@@ -697,11 +682,17 @@ export async function prepareStablecoinSend(
   const method = prepared.paymentMethod;
   if (!SendPaymentMethod.CrossChainAddress.instanceOf(method)) throw new Error("This address can't be paid in USDT or USDC");
   const q = method.inner;
+  if (input.details.amount !== undefined && BigInt(q.estimatedOut) < BigInt(input.details.amount)) throw new Error("This quote would deliver less than the requested deposit. Request another quote.");
+  if (q.sourceTransferFeeSats > 0n && !usdPerBtc) await fiatRates();
+  if (q.sourceTransferFeeSats > 0n && !usdPerBtc) throw new Error("Couldn't calculate the transfer fee. Try again.");
+  const sourceFeeUsd = Number(q.sourceTransferFeeSats) / 1e8 * (usdPerBtc ?? 0);
   return {
     theyGetUsd: fromBaseUnits(BigInt(q.estimatedOut), route.decimals),
-    feeUsd: fromBaseUnits(BigInt(q.feeAmount), route.decimals),
+    theyGetAmount: tokenAmount(BigInt(q.estimatedOut), route.decimals),
+    feeUsd: fromBaseUnits(BigInt(q.feeAmount), route.decimals) + sourceFeeUsd,
+    totalUsd: fromBaseUnits(BigInt(q.assetAmountIn), route.decimals) + sourceFeeUsd,
     from: fromDollars ? "dollars" : "bitcoin",
-    expiresAt: Number(q.expiresAt),
+    expiresAt: quoteExpiry(q.expiresAt),
     send: async () => {
       const res = await s.sendPayment({ prepareResponse: prepared, options: undefined, idempotencyKey: undefined });
       return toTx(res.payment);

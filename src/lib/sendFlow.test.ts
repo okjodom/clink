@@ -1,6 +1,18 @@
-import { oncePayment, quoteProblem, shortRecipient } from "./sendFlow";
+import { oncePayment, quotedFeeSats, quoteProblem, shortRecipient } from "./sendFlow";
 
 describe("send confirmation", () => {
+  it("includes the broadcast fee in the Bitcoin quote and balance check", () => {
+    const fee = quotedFeeSats({ inner: { feeQuote: { speedMedium: { userFeeSat: 100n, l1BroadcastFeeSat: 300n } } } });
+    expect(fee).toBe(400n);
+    expect(quoteProblem(600n, fee, 999n)).toMatch(/Not enough/);
+    expect(quoteProblem(600n, fee, 1000n)).toBeNull();
+  });
+  it("keeps Lightning and Spark fees, including free transfers, and rejects missing fees", () => {
+    expect(quotedFeeSats({ inner: { sparkTransferFeeSats: 2n, lightningFeeSats: 10n } })).toBe(2n);
+    expect(quotedFeeSats({ inner: { lightningFeeSats: 10n } })).toBe(10n);
+    expect(quotedFeeSats({ inner: { fee: 0n } })).toBe(0n);
+    expect(() => quotedFeeSats({ inner: {} })).toThrow(/fee/);
+  });
   it("submits a quote once across rapid taps and later repeats", async () => {
     let finish!: (value: string) => void;
     const submit = jest.fn(() => new Promise<string>((resolve) => { finish = resolve; }));

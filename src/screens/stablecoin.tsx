@@ -65,7 +65,7 @@ export function ReceiveStablecoinScreen() {
         <Card style={{ alignItems: "center", gap: space.lg }}>
           <QR value={request.paymentRequest} />
           <View style={{ alignItems: "center", gap: 2 }}>
-            <Text variant="title">{`Send ${formatUsd(request.sendUsd)}`}</Text>
+            <Text variant="title" adjustsFontSizeToFit numberOfLines={1}>{`Send ${request.sendAmount} ${route.asset}`}</Text>
             <Text variant="caption" muted center>
               {`${route.label}, to this address`}
             </Text>

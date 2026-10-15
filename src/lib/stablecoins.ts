@@ -27,6 +27,19 @@ export function fromBaseUnits(units: bigint, decimals: number): number {
   return Number(units / scale) + Number(units % scale) / Number(scale);
 }
 
+/** Keep the exact quoted deposit, including sub-cent token units. */
+export function tokenAmount(units: bigint, decimals: number): string {
+  const scale = 10n ** BigInt(decimals);
+  const fraction = (units % scale).toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${units / scale}${fraction ? `.${fraction}` : ""}`;
+}
+
+export function quoteExpiry(value: string | number | bigint): number {
+  const seconds = typeof value === "string" && !/^\d+(\.\d+)?$/.test(value) ? Date.parse(value) / 1000 : Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) throw new Error("The payment quote has an invalid expiry. Request a new quote.");
+  return seconds;
+}
+
 /** "$12.50": stablecoins are always shown in dollars, whatever the wallet's currency. */
 export function formatUsd(usd: number): string {
   return `$${usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

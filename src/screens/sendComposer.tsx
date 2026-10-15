@@ -9,7 +9,7 @@ import { errorText } from "../lib/errors";
 import { parseAgentLink } from "../lib/links";
 import { oncePayment, quoteProblem, shortRecipient } from "../lib/sendFlow";
 import { formatSats } from "../lib/money";
-import { formatUsd, looksLikeStablecoinAddress } from "../lib/stablecoins";
+import { formatUsd, looksLikeStablecoinAddress, tokenAmount } from "../lib/stablecoins";
 import { expandUsername } from "../lib/username";
 import * as wallet from "../services/wallet";
 import { useWallet } from "../store/wallet";
@@ -135,6 +135,7 @@ export function SendScreen() {
         setRoutes(options);
         // Ambiguous addresses require an explicit network choice.
         setStableRoute(options.length === 1 ? options[0] : null);
+        if (next.details.amount !== undefined && options.length === 1) setUsd(tokenAmount(BigInt(next.details.amount), options[0].decimals));
       }
       if (next.type !== "lnurl" && next.type !== "stablecoin" && next.amountSats) input.setSats(Number(next.amountSats));
       if (next.type === "bolt11" && !next.amountSats) throw new Error("Ask for a payment request with an amount.");
@@ -300,7 +301,7 @@ export function SendScreen() {
       {stable && <Row icon="globe" title={stableRoute?.label ?? "Choose asset and network"} subtitle="Must match the recipient's wallet" chevron onPress={busy ? undefined : () => setNetworkOpen(true)} />}
       <View style={{ flex: 1, justifyContent: "center" }}>
         {stable ? <View style={{ alignItems: "center", gap: space.sm }}>
-          <Text variant="caption" muted>USD</Text><Text variant="hero">{usd}</Text>
+          <Text variant="caption" muted>USD</Text><Text variant="hero" adjustsFontSizeToFit numberOfLines={1}>{usd}</Text>
           <Text variant="caption" muted>{stableRoute ? `Send as ${stableRoute.asset}` : "Choose a network above"}</Text>
         </View> : fixedAmount ? <View style={{ alignItems: "center", gap: space.sm }}>
           <Text variant="hero" adjustsFontSizeToFit numberOfLines={1}>{money.primary(fixedAmount)}</Text>
@@ -310,11 +311,11 @@ export function SendScreen() {
         <Text variant="caption" muted center>{balance === null ? "Loading your available balance…" : `Available: ${money.primary(balance)}`}</Text>
         {(amountProblem || error) && <Text variant="caption" color={c.danger} center style={{ marginTop: space.sm }}>{amountProblem ?? error}</Text>}
       </View>
-      {!fixedAmount && (stable ? <NumPad value={usd} onChange={setUsd} decimals={2} max={9} /> : <AmountPad input={input} />)}
+      {!fixedAmount && (stable ? <NumPad value={usd} onChange={setUsd} decimals={Math.min(stableRoute?.decimals ?? 6, 8)} max={12} /> : <AmountPad input={input} />)}
       <Sheet visible={networkOpen} onClose={() => setNetworkOpen(false)} title="Asset and network">
         <Text variant="caption" muted>Choose the network the recipient uses for this address.</Text>
         <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ gap: space.sm }}>
-          {routes.map((option) => <Row key={option.label} icon={option.label === stableRoute?.label ? "check-circle" : "circle"} title={option.label} onPress={() => { setStableRoute(option); setNetworkOpen(false); setError(null); }} />)}
+          {routes.map((option) => <Row key={option.label} icon={option.label === stableRoute?.label ? "check-circle" : "circle"} title={option.label} onPress={() => { setStableRoute(option); if (parsed.type === "stablecoin" && parsed.details.amount !== undefined) setUsd(tokenAmount(BigInt(parsed.details.amount), option.decimals)); setNetworkOpen(false); setError(null); }} />)}
         </ScrollView>
       </Sheet>
       <Sheet visible={!!prepared || !!stableQuote} onClose={clearReview} title="Review payment" right={<Logo size={36} />}>
@@ -326,9 +327,10 @@ export function SendScreen() {
           <View style={{ padding: space.lg, borderRadius: radius.lg, backgroundColor: c.surface, gap: space.md }}>
             <KeyValue label="To" value={recipient} />
             {stableQuote && <>
-              <KeyValue label="You send" value={formatUsd(Number(usd))} />
+              <KeyValue label="Recipient gets" value={`${stableQuote.theyGetAmount} ${stableRoute?.asset ?? ""}`} />
               <KeyValue label="Network" value={stableRoute?.label ?? ""} />
               <KeyValue label="Estimated fee" value={formatUsd(stableQuote.feeUsd)} />
+              <KeyValue label="Total" value={formatUsd(stableQuote.totalUsd)} />
               <KeyValue label="Paid from" value={stableQuote.from === "dollars" ? "Your dollars" : "Your bitcoin"} />
             </>}
             {prepared && <>
@@ -339,7 +341,7 @@ export function SendScreen() {
           {stableQuote && <Notice tone="warning">{`Confirm the recipient uses ${stableRoute?.label}. This network must match.`}</Notice>}
           {(totalProblem || error) && <Notice tone="danger">{totalProblem ?? error}</Notice>}
         </ScrollView>
-        <Button title={stableQuote ? `Send ${formatUsd(Number(usd))}` : prepared ? `Send ${money.primary(prepared.amountSats)}` : "Send"} loading={busy} disabled={!!totalProblem} onPress={confirm} />
+        <Button title={stableQuote ? `Send ${formatUsd(stableQuote.totalUsd)}` : prepared ? `Send ${money.primary(prepared.amountSats)}` : "Send"} loading={busy} disabled={!!totalProblem} onPress={confirm} />
       </Sheet>
     </Screen>
   );
