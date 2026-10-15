@@ -5,6 +5,7 @@ import { View } from "react-native";
 
 import { useMe, useMoney } from "../hooks";
 import type { SwapItem } from "../hooks";
+import { paymentLabel, swapPaymentPrefix } from "../lib/activity";
 import { describeSwap, STEPS } from "../lib/swapView";
 import { unreadCount, useSwaps } from "../store/swaps";
 import type { WalletTx } from "../services/wallet";
@@ -75,17 +76,15 @@ export function Steps({ step, tone }: { step: number; tone: "danger" | string })
 
 /** Swap escrow payments carry "Pontmore swap <id prefix>"; other and older clients put their app name first. */
 function useSwapOf(tx: WalletTx): { label: string; id?: string; adding: boolean } | null {
-  const prefix = tx.description?.match(/^Pont(?:spark|more) swap ([0-9a-f]{8})$/)?.[1];
+  const prefix = swapPaymentPrefix(tx);
   const rec = useSwaps((s) => (prefix ? Object.values(s.records).find((r) => r.id.startsWith(prefix)) : undefined));
   if (!prefix) return null;
-  const who = rec?.local.counterpartyName;
   const added = tx.direction === "in";
   // To an agent, money in means a customer cashed out with them, money out that one added money.
-  if (rec?.role === "agent") return { id: rec.id, adding: !added, label: added ? `Cash out${who ? ` via ${who}` : ""}` : `Add money${who ? ` via ${who}` : ""}` };
   return {
     id: rec?.id,
-    adding: added,
-    label: who ? (added ? `Added via ${who}` : `Cashed out via ${who}`) : added ? "Added money" : "Cashed out",
+    adding: rec?.role === "agent" ? !added : added,
+    label: paymentLabel(tx, rec?.role, rec?.local.counterpartyName),
   };
 }
 
@@ -95,20 +94,7 @@ export function TxRow({ tx, hidden }: { tx: WalletTx; hidden?: boolean }) {
   const money = useMoney();
   const incoming = tx.direction === "in";
   const swap = useSwapOf(tx);
-  const swapLabel = swap?.label;
-  const label =
-    swapLabel ??
-    (tx.kind === "htlc"
-      ? incoming
-        ? tx.htlc?.status === "waiting"
-          ? "On its way"
-          : "Added money"
-        : tx.htlc?.status === "returned"
-          ? "Returned to you"
-          : tx.htlc?.status === "waiting"
-            ? "Set aside for cash out"
-            : "Cashed out"
-      : incoming ? "Received" : tx.recipient?.includes("@") ? `Paid ${tx.recipient.split("@")[0]}` : "Sent");
+  const label = swap?.label ?? paymentLabel(tx);
   const swapPayment = !!swap || tx.kind === "htlc";
   const adding = swap?.adding ?? incoming;
   const icon: React.ComponentProps<typeof Feather>["name"] = tx.status === "pending" ? "clock" : swapPayment
