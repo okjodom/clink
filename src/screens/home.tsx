@@ -214,14 +214,14 @@ export function HomeScreen() {
             <Feather name="plus-circle" size={22} color={c.primaryInk} />
             <Text variant="heading">Add money</Text>
             <Text variant="caption" muted>
-              From M-Pesa, mobile money or cash
+              From mobile money, bank or cash
             </Text>
           </Card>
           <Card style={{ flex: 1, flexBasis: 0, minWidth: 0 }} onPress={() => nav.navigate("NewSwap", { direction: "btc_to_fiat" })}>
             <Feather name="minus-circle" size={22} color={c.positive} />
             <Text variant="heading">Cash out</Text>
             <Text variant="caption" muted>
-              To M-Pesa, mobile money or cash
+              To mobile money, bank or cash
             </Text>
           </Card>
         </View>
@@ -254,7 +254,7 @@ export function HomeScreen() {
         {status === "connecting" && txs.length === 0 ? (
           <Spinner label="Opening your wallet…" />
         ) : txs.length === 0 ? (
-          <Empty icon="inbox" title="Nothing here yet" body="Share your username to get paid, or add money from M-Pesa." />
+          <Empty icon="inbox" title="Nothing here yet" body="Share your username to get paid, or add money through an agent." />
         ) : (
           <Card style={{ paddingVertical: space.sm, gap: 0 }}>
             {txs.slice(0, 6).map((t) => (

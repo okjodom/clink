@@ -14,6 +14,10 @@ describe("expandUsername", () => {
   it("adds your own domain to a bare username", () => {
     expect(expandUsername(" Jane ", "me@pay.example")).toBe("jane@pay.example");
   });
+  it("accepts the @username displayed in recent recipients", () => {
+    expect(expandUsername("@Jane", "me@pay.example")).toBe("jane@pay.example");
+    expect(expandUsername("jane@other.example", "me@pay.example")).toBe("jane@other.example");
+  });
   it("leaves addresses, codes and unknown domains alone", () => {
     expect(expandUsername("jane@other.example", "me@pay.example")).toBe("jane@other.example");
     expect(expandUsername("lnbc1500n1pj9", "me@pay.example")).toBe("lnbc1500n1pj9");

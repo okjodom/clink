@@ -66,6 +66,7 @@ export default {
       ],
     },
     plugins: [
+      "expo-sharing",
       "@breeztech/breez-sdk-spark-react-native",
       ["expo-camera", { cameraPermission: CAMERA_COPY }],
       "expo-secure-store",

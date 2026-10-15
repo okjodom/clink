@@ -63,6 +63,7 @@ export function Screen({
   children,
   title,
   back,
+  onBack,
   right,
   scroll = true,
   padded = true,
@@ -75,6 +76,7 @@ export function Screen({
   children: React.ReactNode;
   title?: string;
   back?: boolean;
+  onBack?: () => void;
   right?: React.ReactNode;
   scroll?: boolean;
   padded?: boolean;
@@ -102,7 +104,7 @@ export function Screen({
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
-      {(back || (title && !large) || (right && !large)) && <Header title={large ? undefined : title} back={back} right={right} />}
+      {(back || (title && !large) || (right && !large)) && <Header title={large ? undefined : title} back={back} onBack={onBack} right={right} />}
       {!back && large && <View style={{ height: space.sm }} />}
       {scroll ? (
         <ScrollView
@@ -124,14 +126,14 @@ export function Screen({
   );
 }
 
-export function Header({ title, back, right }: { title?: string; back?: boolean; right?: React.ReactNode }) {
+export function Header({ title, back, onBack, right }: { title?: string; back?: boolean; onBack?: () => void; right?: React.ReactNode }) {
   const nav = useNavigation();
   const c = useColors();
   return (
     <View style={styles.header}>
       <View style={{ width: 44 }}>
         {back && (
-          <Pressable hitSlop={12} onPress={() => nav.goBack()} style={({ pressed }) => [styles.iconBtn, { backgroundColor: c.surface, opacity: pressed ? 0.65 : 1 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={12} onPress={onBack ?? (() => nav.goBack())} style={({ pressed }) => [styles.iconBtn, { backgroundColor: c.surface, opacity: pressed ? 0.65 : 1 }]}>
             <Feather name="chevron-left" size={22} color={c.text} />
           </Pressable>
         )}

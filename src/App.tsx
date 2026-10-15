@@ -11,6 +11,7 @@ import { installDevProbe } from "./services/devProbe";
 import { resumeEngine, startEngine, stopEngine } from "./services/swapEngine";
 import { useSession } from "./store/session";
 import { useWallet } from "./store/wallet";
+import { refreshContacts, startContacts } from "./services/contacts";
 import { Logo } from "./ui/components";
 import { useCelebrateFinishedSwaps, useCelebrateIncoming } from "./hooks";
 import { CelebrationHost } from "./ui/celebrate";
@@ -22,6 +23,7 @@ function useBoot() {
   const phase = useSession((s) => s.phase);
   const keys = useSession((s) => s.keys);
   const boot = useSession((s) => s.boot);
+  const relays = useSession((s) => s.relays);
 
   useEffect(() => {
     if (hydrated && phase === "loading") void boot();
@@ -40,12 +42,18 @@ function useBoot() {
     };
   }, [phase, keys]);
 
+  useEffect(() => {
+    if (phase !== "ready" || !keys) return;
+    return startContacts(keys, relays, useSession.getState().recents, () => useSession.setState({ recents: [] }));
+  }, [phase, keys, relays]);
+
   // Catch up after the app was in the background.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
       if (s !== "active" || useSession.getState().phase !== "ready") return;
       void useWallet.getState().refresh();
       resumeEngine();
+      refreshContacts();
     });
     return () => sub.remove();
   }, []);

@@ -144,7 +144,6 @@ export const useSession = create<SessionState>()(
         hideBalance: s.hideBalance,
         preferSats: s.preferSats,
         needsName: s.needsName,
-        recents: s.recents,
       }),
       onRehydrateStorage: () => () => useSession.setState({ hydrated: true }),
     },

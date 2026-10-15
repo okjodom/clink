@@ -3,11 +3,13 @@ import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import QRCode from "react-qr-code";
-import Svg, { G, Rect } from "react-native-svg";
+import Svg, { G, Rect, Text as SvgText } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 
 import { errorText } from "../lib/errors";
+import { BRAND } from "../brand";
+import { captureImage, shareImage } from "../services/shareImage";
 import { radius, space, useColors } from "./theme";
 import { Button, Text, tap, success } from "./components";
 
@@ -54,7 +56,7 @@ export function NumPad({ value, onChange, decimals = 2, max = 12 }: { value: str
 
 // -- sheet -------------------------------------------------------------------------
 
-export function Sheet({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title?: string; children: React.ReactNode }) {
+export function Sheet({ visible, onClose, title, right, children }: { visible: boolean; onClose: () => void; title?: string; right?: React.ReactNode; children: React.ReactNode }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const y = useRef(new Animated.Value(400)).current;
@@ -86,10 +88,11 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
           style={[styles.sheet, { backgroundColor: c.bg, paddingBottom: Math.max(insets.bottom, space.lg), transform: [{ translateY: y }] }]}
         >
           <View style={[styles.grabber, { backgroundColor: c.border }]} />
-          {title && (
-            <Text variant="title" style={{ marginBottom: space.sm }}>
-              {title}
-            </Text>
+          {(title || right) && (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.sm }}>
+              {title && <Text variant="title" style={{ flexShrink: 1 }}>{title}</Text>}
+              {right}
+            </View>
           )}
           {children}
         </Animated.View>
@@ -101,15 +104,15 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
 // -- QR + copy ---------------------------------------------------------------------
 
 /** A QR code to show or save as an image: for a shop counter, a poster or a group. */
-export function QrShareSheet({ visible, onClose, title, caption, value, fileName }: { visible: boolean; onClose: () => void; title: string; caption: string; value: string; fileName: string }) {
+export function QrShareSheet({ visible, onClose, title, caption, value, fileName, share = false }: { visible: boolean; onClose: () => void; title: string; caption: string; value: string; fileName: string; share?: boolean }) {
   const ref = useRef<Svg>(null);
   const [saving, setSaving] = useState(false);
+  const imageHeight = share ? 340 : 280;
   const save = async () => {
     if (saving || !ref.current) return;
     setSaving(true);
     try {
-      const svg = ref.current;
-      const b64 = await new Promise<string>((resolve) => svg.toDataURL(resolve, { width: 1024, height: 1024 }));
+      const b64 = await captureImage(ref.current, 1024, Math.round(1024 * imageHeight / 280));
       const { Directory } = await import("expo-file-system");
       const dir = await Directory.pickDirectoryAsync();
       const name = fileName.replace(/[^a-z0-9@._-]/gi, "_").replace(/^\.+/, "") || "qr-code";
@@ -128,14 +131,25 @@ export function QrShareSheet({ visible, onClose, title, caption, value, fileName
       </Text>
       <View style={[styles.qr, { padding: 0 }]}>
         {/* Keep the white quiet zone inside the exported image, not just the surrounding View. */}
-        <Svg ref={ref} width={248} height={248} viewBox="0 0 248 248">
-          <Rect width={248} height={248} fill="#ffffff" />
-          <G transform="translate(24 24)">
+        <Svg ref={ref} width={share ? 240 : 280} height={share ? 291 : 280} viewBox={`0 0 280 ${imageHeight}`}>
+          <Rect width={280} height={imageHeight} fill="#ffffff" />
+          <G transform="translate(40 40)">
             <QRCode value={value} size={200} bgColor="#ffffff" fgColor="#14110f" />
           </G>
+          {share && <>
+            <SvgText x={140} y={299} textAnchor="middle" fontSize={14} fontWeight="600" fill="#14110f" textLength={value.length > 30 ? 250 : undefined} lengthAdjust="spacingAndGlyphs">{value}</SvgText>
+            <SvgText x={140} y={325} textAnchor="middle" fontSize={12} fill="#5e564c">{`Pay me back on ${BRAND.name}`}</SvgText>
+          </>}
         </Svg>
       </View>
       <Button title="Save QR code" icon="download" onPress={save} loading={saving} />
+      {share && <Button title="Share QR image" icon="share-2" kind="secondary" disabled={saving} onPress={async () => {
+        if (!ref.current || saving) return;
+        setSaving(true);
+        try { await shareImage(ref.current, fileName, 1080, Math.round(1080 * imageHeight / 280)); }
+        catch (error) { toastError(error); }
+        finally { setSaving(false); }
+      }} />}
     </Sheet>
   );
 }

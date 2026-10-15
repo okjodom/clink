@@ -13,7 +13,7 @@ import { rankOffers, useDiscovery, usePayouts, type Match } from "../store/disco
 import { useWorthBackingUp } from "../hooks";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
-import { Avatar, Badge, Button, Card, Chip, Field, Notice, Row, Screen, Segmented, Spinner, Text, success } from "../ui/components";
+import { Avatar, Badge, Button, Card, Chip, Field, IconButton, Notice, Row, Screen, Segmented, Spinner, Text, success } from "../ui/components";
 import { NumPad, Sheet, toastError } from "../ui/extras";
 import { ChannelFields } from "../ui/channelFields";
 import { KeyValue } from "../ui/rows";
@@ -83,6 +83,7 @@ export function NewSwapScreen() {
     <Screen
       back
       title={fixedAgent ? (agents[fixedAgent]?.profile.name ?? "Agent") : direction === "fiat_to_btc" ? "Add money" : "Cash out"}
+      right={<IconButton name="users" label="Agents you've used" onPress={() => nav.navigate("Contacts", { view: "agents" })} />}
       scroll={false}
       footer={
         <Button

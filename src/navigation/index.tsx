@@ -22,6 +22,7 @@ import { ScanScreen, SendScreen } from "../screens/send";
 import { ReceiveStablecoinScreen } from "../screens/stablecoin";
 import { ChatScreen, SwapDetailScreen } from "../screens/swapDetail";
 import { NewSwapScreen, ReviewSwapScreen } from "../screens/swapNew";
+import { ContactsScreen } from "../screens/contacts";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -134,6 +135,7 @@ export function RootNavigator() {
             <Stack.Screen name="Receive" component={ReceiveScreen} />
             <Stack.Screen name="ReceiveStablecoin" component={ReceiveStablecoinScreen} />
             <Stack.Screen name="Send" component={SendScreen} />
+            <Stack.Screen name="Contacts" component={ContactsScreen} />
             <Stack.Screen name="Scan" component={ScanScreen} options={{ presentation: "fullScreenModal", animation: "fade" }} />
             <Stack.Screen name="Transactions" component={TransactionsScreen} />
             <Stack.Screen name="Swaps" component={ActivityScreen} />

@@ -148,6 +148,8 @@ export function MeScreen() {
           <Toggle icon="hash" label="Show amounts in sats" subtitle="Bitcoin's smallest unit" value={preferSats} onChange={togglePreferSats} />
           <Divider />
           <Row icon="list" title="Activity" subtitle="Payments and swaps" chevron onPress={() => nav.navigate("Transactions")} />
+          <Divider />
+          <Row icon="users" title="People" subtitle="Your private contact index" chevron onPress={() => nav.navigate("Contacts")} />
         </Card>
       </Section>
 
