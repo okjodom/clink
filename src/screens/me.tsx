@@ -17,7 +17,7 @@ import { useAgent } from "../store/agent";
 import { useSession } from "../store/session";
 import { useSwaps } from "../store/swaps";
 import { useWallet } from "../store/wallet";
-import { Avatar, Badge, Button, Card, Divider, Empty, Field, Notice, Row, Screen, Section, Segmented, Text, Toggle, success } from "../ui/components";
+import { Avatar, Badge, Button, Card, Divider, Empty, Field, IconButton, Notice, Row, Screen, Section, Segmented, Text, Toggle, success } from "../ui/components";
 import { CopyField, QrShareSheet, Sheet, confirm, toast } from "../ui/extras";
 import { SwapRow } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
@@ -83,7 +83,11 @@ export function MeScreen() {
   if (!keys) return null;
 
   return (
-    <Screen large title="Me">
+    <Screen
+      large
+      title="Me"
+      right={lnAddress ? <IconButton name="share-2" label="Share my username" onPress={() => setShareOpen(true)} /> : undefined}
+    >
       <Card style={{ flexDirection: "row", alignItems: "center" }} onPress={() => setNameOpen(true)}>
         <Avatar pk={keys.identity.pk} name={profile.name} size={52} />
         <View style={{ flex: 1, gap: 2 }}>
@@ -95,20 +99,13 @@ export function MeScreen() {
         <Feather name="edit-2" size={16} color={c.textMuted} />
       </Card>
 
-      {lnAddress ? (
-        <Button
-          kind="secondary"
-          icon="share"
-          title="Share my username"
-          onPress={() => setShareOpen(true)}
-        />
-      ) : (
+      {!lnAddress && (
         <Button kind="secondary" icon="at-sign" title="Pick a username" onPress={() => setClaimOpen(true)} />
       )}
 
-      <Card tone={mode === "agent" ? "primary" : "accent"}>
+      <Card tone={mode === "agent" ? "primary" : "positive"}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-          <Feather name={mode === "agent" ? "user" : "trending-up"} size={22} color={mode === "agent" ? c.primaryInk : c.accent} />
+          <Feather name={mode === "agent" ? "user" : "trending-up"} size={22} color={mode === "agent" ? c.primaryInk : c.positive} />
           <View style={{ flex: 1 }}>
             <Text variant="heading">{mode === "agent" ? "Switch to personal mode" : configured ? "Switch to agent mode" : "Earn as an agent"}</Text>
             <Text variant="caption" muted>
@@ -118,7 +115,7 @@ export function MeScreen() {
         </View>
         <Button
           small
-          kind={mode === "agent" ? "secondary" : "accent"}
+          kind={mode === "agent" ? "secondary" : "positive"}
           title={mode === "agent" ? "Personal mode" : configured ? "Agent mode" : "Start earning"}
           onPress={() => {
             if (mode === "agent") return leaveAgent();

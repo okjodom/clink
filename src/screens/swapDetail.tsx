@@ -347,7 +347,7 @@ export function SwapDetailScreen() {
 
       {/* What the fiat receiver should look for */}
       {iReceiveFiat && st.status === "fiat_sent" && !st.disputed && (theirRef || (payTo && describeDetails(payTo.channel, payTo.details).length > 0)) && (
-        <Card tone="accent">
+        <Card tone="positive">
           <Text variant="label">Look for</Text>
           <KeyValue label="Amount" value={view.fiatLabel} />
           {theirRef && <KeyValue label={ch.referenceLabel} value={theirRef} />}

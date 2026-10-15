@@ -100,7 +100,7 @@ function AgentCard({ listing, currency, onPress }: { listing: AgentListing; curr
       </View>
       <View style={{ flexDirection: "row", gap: space.md }}>
         <FeeBox label="Add money" pct={feePct(offer.buy?.price, rate, 1)} color={c.primaryInk} />
-        <FeeBox label="Cash out" pct={feePct(offer.sell?.price, rate, -1)} color={c.accent} />
+        <FeeBox label="Cash out" pct={feePct(offer.sell?.price, rate, -1)} color={c.positive} />
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {offer.channels.map((ch) => (

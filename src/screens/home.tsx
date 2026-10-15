@@ -218,7 +218,7 @@ export function HomeScreen() {
             </Text>
           </Card>
           <Card style={{ flex: 1, flexBasis: 0, minWidth: 0 }} onPress={() => nav.navigate("NewSwap", { direction: "btc_to_fiat" })}>
-            <Feather name="minus-circle" size={22} color={c.accent} />
+            <Feather name="minus-circle" size={22} color={c.positive} />
             <Text variant="heading">Cash out</Text>
             <Text variant="caption" muted>
               To M-Pesa, mobile money or cash

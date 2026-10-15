@@ -161,10 +161,10 @@ export function IconButton({ name, onPress, label }: { name: IconName; onPress: 
   );
 }
 
-export function Card({ children, style, onPress, tone }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; tone?: "default" | "alt" | "primary" | "accent" | "danger" | "warning" }) {
+export function Card({ children, style, onPress, tone }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; tone?: "default" | "alt" | "primary" | "positive" | "accent" | "danger" | "warning" }) {
   const c = useColors();
   const bg =
-    tone === "alt" ? c.surfaceAlt : tone === "primary" ? c.primarySoft : tone === "accent" ? c.accentSoft : tone === "danger" ? c.dangerSoft : tone === "warning" ? c.warningSoft : c.surface;
+    tone === "alt" ? c.surfaceAlt : tone === "primary" ? c.primarySoft : tone === "positive" ? c.positiveSoft : tone === "accent" ? c.accentSoft : tone === "danger" ? c.dangerSoft : tone === "warning" ? c.warningSoft : c.surface;
   if (!onPress) return <View style={[styles.card, { backgroundColor: bg }, style]}>{children}</View>;
   // The Pressable is what sits in the parent's layout, so flex sizing belongs on it.
   const { flex, flexBasis, flexGrow, flexShrink, minWidth, maxWidth, width, alignSelf, ...rest } = StyleSheet.flatten(style) ?? {};
@@ -305,7 +305,7 @@ export function Collapsible({ title, summary, children, initiallyOpen = false }:
 
 // -- buttons -------------------------------------------------------------------
 
-type ButtonKind = "primary" | "secondary" | "ghost" | "danger" | "accent";
+type ButtonKind = "primary" | "secondary" | "ghost" | "danger" | "accent" | "positive";
 
 export function Button({
   title,
@@ -329,6 +329,7 @@ export function Button({
   const c = useColors();
   const palette: Record<ButtonKind, { bg: string; fg: string; border?: string }> = {
     primary: { bg: c.primary, fg: c.primaryText },
+    positive: { bg: c.positive, fg: c.positiveText },
     accent: { bg: c.accent, fg: c.accentText },
     secondary: { bg: c.surface, fg: c.text, border: c.border },
     ghost: { bg: "transparent", fg: c.primaryInk },
