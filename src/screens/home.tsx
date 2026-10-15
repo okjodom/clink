@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
-import { ActivityIndicator, Keyboard, Pressable, View } from "react-native";
+import { ActivityIndicator, Keyboard, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { useActiveSwaps, useBackupNudge, useMe, useMoney, useNow, type SwapItem } from "../hooks";
 import { ACTIVITY_FILTERS, matchesActivityFilter, matchesActivitySearch, paymentCategory, paymentLabel, swapPaymentPrefix, type ActivityFilter } from "../lib/activity";
@@ -299,30 +299,29 @@ export function TransactionsScreen() {
       && matchesActivitySearch(search, [view.title, view.headline, i.rec.local.counterpartyName, "pending"]);
   });
   const [refreshing, setRefreshing] = useState(false);
+  const refreshActivity = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
   return (
     <Screen
       back
       title="Activity"
-      onRefresh={async () => {
-        setRefreshing(true);
-        try {
-          await refresh();
-        } finally {
-          setRefreshing(false);
-        }
-      }}
-      refreshing={refreshing}
+      scroll={false}
+      style={{ paddingBottom: 0 }}
+      right={<IconButton name="filter" label={`Filter activity: ${ACTIVITY_FILTERS.find((option) => option.value === filter)?.label}`} onPress={() => { Keyboard.dismiss(); setFilterOpen(true); }} />}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
-        <View style={{ flex: 1 }}>
-          <Field value={search} onChangeText={setSearch} placeholder="Search activity" accessibilityLabel="Search activity" autoCorrect={false} autoCapitalize="none" returnKeyType="search" style={{ paddingRight: 48 }} onSubmitEditing={() => Keyboard.dismiss()} />
-          {search.length > 0 && (
-            <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch("")} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 44, alignItems: "center", justifyContent: "center" }}>
-              <Feather name="x" size={18} color={c.textMuted} />
-            </Pressable>
-          )}
-        </View>
-        <IconButton name="filter" label={`Filter activity: ${ACTIVITY_FILTERS.find((option) => option.value === filter)?.label}`} onPress={() => { Keyboard.dismiss(); setFilterOpen(true); }} />
+      <View>
+        <Field value={search} onChangeText={setSearch} placeholder="Search activity" accessibilityLabel="Search activity" autoCorrect={false} autoCapitalize="none" returnKeyType="search" style={{ paddingRight: 48 }} onSubmitEditing={() => Keyboard.dismiss()} />
+        {search.length > 0 && (
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch("")} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 44, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="x" size={18} color={c.textMuted} />
+          </Pressable>
+        )}
       </View>
       {filter !== "all" && (
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
@@ -330,24 +329,32 @@ export function TransactionsScreen() {
           <Button small kind="ghost" title="Clear filter" onPress={() => setFilter("all")} />
         </View>
       )}
-      {shownActive.length > 0 && (
-        <Section title="In progress">
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ gap: space.lg, paddingBottom: space.xl }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshActivity} tintColor={c.primaryInk} />}
+      >
+        {shownActive.length > 0 && (
+          <Section title="In progress">
+            <Card style={{ paddingVertical: space.sm, gap: 0 }}>
+              {shownActive.map((i) => (
+                <SwapRow key={i.rec.id} item={i} />
+              ))}
+            </Card>
+          </Section>
+        )}
+        {shownTxs.length === 0 && shownActive.length === 0 ? (
+          <Empty icon="inbox" title={filter === "all" && !search.trim() ? "No payments yet" : "No matching activity"} body={filter === "all" && !search.trim() ? undefined : "Try another search or filter."} />
+        ) : shownTxs.length > 0 ? (
           <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-            {shownActive.map((i) => (
-              <SwapRow key={i.rec.id} item={i} />
+            {shownTxs.map((t) => (
+              <TxRow key={t.id} tx={t} hidden={hide} />
             ))}
           </Card>
-        </Section>
-      )}
-      {shownTxs.length === 0 && shownActive.length === 0 ? (
-        <Empty icon="inbox" title={filter === "all" && !search.trim() ? "No payments yet" : "No matching activity"} body={filter === "all" && !search.trim() ? undefined : "Try another search or filter."} />
-      ) : shownTxs.length > 0 ? (
-        <Card style={{ paddingVertical: space.sm, gap: 0 }}>
-          {shownTxs.map((t) => (
-            <TxRow key={t.id} tx={t} hidden={hide} />
-          ))}
-        </Card>
-      ) : null}
+        ) : null}
+      </ScrollView>
       <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title="Filter activity">
         {ACTIVITY_FILTERS.map((option) => (
           <Row
