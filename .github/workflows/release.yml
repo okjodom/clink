@@ -124,3 +124,21 @@ jobs:
       ref: ${{ needs.release.outputs.release_sha }}
       tag: ${{ needs.release.outputs.tag_name }}
     secrets: inherit
+
+  # A release event emitted by GITHUB_TOKEN does not start another workflow.
+  # Call publishing explicitly after either APK path has finished instead.
+  zapstore:
+    needs: [release, reuse, android]
+    if: >-
+      ${{ !cancelled() && needs.release.outputs.release_created == 'true' &&
+          needs.reuse.result == 'success' &&
+          (needs.reuse.outputs.reused == 'true' || needs.android.result == 'success') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/zapstore.yml
+    with:
+      tag: ${{ needs.release.outputs.tag_name }}
+    secrets:
+      ZAPSTORE_SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+      CLINK_KEYSTORE_BASE64: ${{ secrets.CLINK_KEYSTORE_BASE64 }}
+      CLINK_STORE_PASSWORD: ${{ secrets.CLINK_STORE_PASSWORD }}
