@@ -1,0 +1,22 @@
+repository: https://github.com/okjodom/clink
+pubkey: npub18gufd4g8mrz9qanxja9svr9xmqteq48yhqhkflu7ajm6rzqqgwvq55l049
+name: Clink
+summary: Pay anyone. Add money or cash out with people near you.
+description: |
+  Money that just works. Pick a username to send and receive payments.
+  Add money or cash out to mobile money, bank or cash through agents near you.
+  Keep your balance in dollars or bitcoin, and send or receive bitcoin,
+  Lightning, USDT and USDC. Your keys stay on your phone.
+
+  Clink is experimental software that moves real money. Start with small
+  amounts and back up your recovery phrase.
+license: MIT
+tags:
+  - finance
+  - bitcoin
+  - lightning
+icon: ./assets/icon.png
+images:
+  - ./docs/screenshots/01-home.png
+  - ./docs/screenshots/02-receive.png
+  - ./docs/screenshots/07-desk.png

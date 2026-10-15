@@ -175,6 +175,9 @@ npm test                         # protocol reducer, offers, channels, keys, gif
 npx tsx scripts/relay-smoke.ts   # a full swap chain over live relays (test currency XTS, regtest)
 ```
 
+Signed Android releases are distributed automatically to Zapstore.
+See [release publishing and publisher identity](docs/zapstore.md) for setup and retries.
+
 ## Code map
 
 ```text

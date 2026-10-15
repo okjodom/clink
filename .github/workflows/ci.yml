@@ -32,6 +32,8 @@ jobs:
           done
       - run: npm run typecheck
       - run: npm test
+      - name: Check Zapstore release guards
+        run: node --test scripts/prepare-zapstore.test.mjs scripts/publish-zapstore-proof.test.mjs
 
   # Release pull requests build the exact APK the release will ship, signed
   # with the upload key, so a broken build is caught before the tag exists.
