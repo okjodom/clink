@@ -1,12 +1,12 @@
 import type { WalletTx } from "../services/wallet";
 
 export const ACTIVITY_FILTERS = [
-  { value: "all", label: "All" },
-  { value: "received", label: "Received" },
-  { value: "sent", label: "Sent" },
-  { value: "add-money", label: "Add money" },
-  { value: "cash-out", label: "Cash out" },
-  { value: "pending", label: "Pending" },
+  { value: "all", label: "All", icon: "list" },
+  { value: "received", label: "Received", icon: "arrow-down" },
+  { value: "sent", label: "Sent", icon: "arrow-up" },
+  { value: "add-money", label: "Add money", icon: "plus-circle" },
+  { value: "cash-out", label: "Cash out", icon: "minus-circle" },
+  { value: "pending", label: "Pending", icon: "clock" },
 ] as const;
 
 export type ActivityFilter = (typeof ACTIVITY_FILTERS)[number]["value"];

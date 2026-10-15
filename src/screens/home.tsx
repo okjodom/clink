@@ -350,7 +350,15 @@ export function TransactionsScreen() {
       ) : null}
       <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title="Filter activity">
         {ACTIVITY_FILTERS.map((option) => (
-          <Row key={option.value} title={option.label} right={filter === option.value ? <Feather name="check" size={20} color={c.primaryInk} /> : undefined} onPress={() => { setFilter(option.value); setFilterOpen(false); }} />
+          <Row
+            key={option.value}
+            title={option.label}
+            icon={option.icon}
+            iconColor={option.value === "add-money" ? c.primaryInk : option.value === "received" || option.value === "cash-out" ? c.positive : c.text}
+            iconBg={option.value === "add-money" ? c.primarySoft : option.value === "received" || option.value === "cash-out" ? c.positiveSoft : c.surfaceAlt}
+            right={filter === option.value ? <Feather name="check" size={20} color={c.primaryInk} /> : undefined}
+            onPress={() => { setFilter(option.value); setFilterOpen(false); }}
+          />
         ))}
       </Sheet>
     </Screen>
