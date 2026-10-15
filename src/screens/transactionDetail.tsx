@@ -62,7 +62,7 @@ export function TransactionDetailScreen() {
       <Text variant="heading">{incoming ? "Received" : "Sent"}</Text>
       <Text variant="display" adjustsFontSizeToFit numberOfLines={1}>{amount}</Text>
       {tx.usd === undefined && <Text muted>{formatSats(tx.amountSats)}</Text>}
-      <Badge label={status} tone={failed ? "danger" : complete ? "success" : "info"} />
+      <View style={{ alignSelf: "center" }}><Badge label={status} tone={failed ? "danger" : complete ? "success" : "info"} /></View>
     </View>
     {error && <Notice tone="warning" title="Showing the last available details" action={<Button small kind="secondary" title="Retry" onPress={load} />}>{error}</Notice>}
     <Card>

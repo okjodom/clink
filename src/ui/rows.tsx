@@ -81,7 +81,7 @@ function useSwapOf(tx: WalletTx): { label: string; id?: string; adding: boolean 
   const who = rec?.local.counterpartyName;
   const added = tx.direction === "in";
   // To an agent, money in means a customer cashed out with them, money out that one added money.
-  if (rec?.role === "agent") return { id: rec.id, adding: !added, label: added ? `Cash out${who ? ` for ${who}` : ""}` : `Add money${who ? ` for ${who}` : ""}` };
+  if (rec?.role === "agent") return { id: rec.id, adding: !added, label: added ? `Cash out${who ? ` via ${who}` : ""}` : `Add money${who ? ` via ${who}` : ""}` };
   return {
     id: rec?.id,
     adding: added,
