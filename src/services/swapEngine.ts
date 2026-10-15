@@ -333,7 +333,8 @@ export async function closeOverdueSwap(id: string, ring: KeyRing = k()): Promise
   const me = ring.identity.pk;
   const t = now();
   if (st.forked || st.disputed || ![st.root.agent, st.root.customer].includes(me)) return false;
-  if (st.status === "proposed" && t >= st.root.expiresAt) {
+  // One automatic writer avoids both phones appending competing expiry actions.
+  if (st.status === "proposed" && t >= st.root.expiresAt && st.root.proposer === me) {
     await act(id, ring.identity.sk, "core/expire");
     return true;
   }

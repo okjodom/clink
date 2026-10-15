@@ -88,6 +88,13 @@ it("automatically expires unaccepted requests at the acceptance deadline", async
   expect(swapState(useSwaps.getState().records[id]).status).toBe("expired");
 });
 
+it("lets only the proposer automatically record request expiry, avoiding competing actions", async () => {
+  const id = swap();
+  jest.spyOn(Date, "now").mockReturnValue(700_000);
+  expect(await closeOverdueSwap(id, agentRing)).toBe(false);
+  expect(nostr.publish).not.toHaveBeenCalled();
+});
+
 it.each(["btc_to_fiat", "fiat_to_btc"] as const)("closes an accepted unfunded %s after its payment deadline", async (direction) => {
   const id = swap(direction); accept(id);
   const ring = direction === "btc_to_fiat" ? customerRing : agentRing;
