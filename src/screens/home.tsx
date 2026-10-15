@@ -15,6 +15,7 @@ import { useWallet } from "../store/wallet";
 import { ActionTile, Button, Card, Empty, Field, IconButton, Notice, Row, Screen, Section, Spinner, Text, success, tap } from "../ui/components";
 import { Sheet, toast, toastError } from "../ui/extras";
 import { SwapRow, TxRow } from "../ui/rows";
+import { ActivityShimmer, ActivitySkeleton } from "../ui/activityLoading";
 import { radius, space, useColors } from "../ui/theme";
 
 /**
@@ -94,9 +95,11 @@ function YourTurn({ items }: { items: SwapItem[] }) {
   const now = useNow(15000);
   const next = items.map((i) => ({ i, view: describeSwap(i.rec, i.st, me, now) })).find((x) => x.view.myTurn);
   if (!next) return null;
+  const adding = next.i.st.root.terms.direction === "fiat_to_btc";
+  const color = next.view.tone === "danger" ? c.danger : adding ? c.primaryInk : c.positive;
   return (
-    <Card tone="primary" onPress={() => nav.navigate("SwapDetail", { id: next.i.rec.id })} style={{ flexDirection: "row", alignItems: "center" }}>
-      <Feather name="bell" size={22} color={c.primaryInk} />
+    <Card tone={next.view.tone === "danger" ? "danger" : adding ? "primary" : "positive"} onPress={() => nav.navigate("SwapDetail", { id: next.i.rec.id })} style={{ flexDirection: "row", alignItems: "center" }}>
+      <Feather name="bell" size={22} color={color} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="label">{next.view.headline}</Text>
         <Text variant="caption" muted numberOfLines={2}>
@@ -161,7 +164,7 @@ function HoldInSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
 export function HomeScreen() {
   const nav = useNavigation<any>();
   const c = useColors();
-  const { txs, status, error, refresh, refreshRates, balance } = useWallet();
+  const { txs, status, error, refresh, refreshRates, balance, activityLoaded, activityRefreshing, activitySyncing } = useWallet();
   const nudge = useBackupNudge();
   const name = useSession((s) => s.profile.name);
   const hide = useSession((s) => s.hideBalance);
@@ -243,17 +246,20 @@ export function HomeScreen() {
       <Section
         title="Activity"
         action={
-          txs.length > 0 ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+          {(activityRefreshing || activitySyncing || !activityLoaded) && <ActivityShimmer />}
+          {txs.length > 0 ? (
             <Pressable onPress={() => nav.navigate("Transactions")}>
               <Text variant="label" color={c.primaryInk}>
                 See all
               </Text>
             </Pressable>
-          ) : undefined
+          ) : null}
+          </View>
         }
       >
-        {status === "connecting" && txs.length === 0 ? (
-          <Spinner label="Opening your wallet…" />
+        {!activityLoaded && txs.length === 0 ? (
+          <ActivitySkeleton />
         ) : txs.length === 0 ? (
           <Empty icon="inbox" title="Nothing here yet" body="Share your username to get paid, or add money through an agent." />
         ) : (
@@ -270,7 +276,7 @@ export function HomeScreen() {
 
 /** Payments appear once, with filters and a separate section for swaps still in progress. */
 export function TransactionsScreen() {
-  const { txs, refresh } = useWallet();
+  const { txs, refresh, activityLoaded, activityRefreshing, activitySyncing } = useWallet();
   const money = useMoney();
   const me = useMe();
   const now = useNow(15000);
@@ -313,7 +319,10 @@ export function TransactionsScreen() {
       title="Activity"
       scroll={false}
       style={{ paddingBottom: 0 }}
-      right={<IconButton name="filter" label={`Filter activity: ${ACTIVITY_FILTERS.find((option) => option.value === filter)?.label}`} onPress={() => { Keyboard.dismiss(); setFilterOpen(true); }} />}
+      right={<View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+        {(activityRefreshing || activitySyncing) && <ActivityShimmer width={24} />}
+        <IconButton name="filter" label={`Filter activity: ${ACTIVITY_FILTERS.find((option) => option.value === filter)?.label}`} onPress={() => { Keyboard.dismiss(); setFilterOpen(true); }} />
+      </View>}
     >
       <View>
         <Field value={search} onChangeText={setSearch} placeholder="Search activity" accessibilityLabel="Search activity" autoCorrect={false} autoCapitalize="none" returnKeyType="search" style={{ paddingRight: 48 }} onSubmitEditing={() => Keyboard.dismiss()} />
@@ -345,7 +354,7 @@ export function TransactionsScreen() {
             </Card>
           </Section>
         )}
-        {shownTxs.length === 0 && shownActive.length === 0 ? (
+        {!activityLoaded && txs.length === 0 ? <ActivitySkeleton /> : shownTxs.length === 0 && shownActive.length === 0 ? (
           <Empty icon="inbox" title={filter === "all" && !search.trim() ? "No payments yet" : "No matching activity"} body={filter === "all" && !search.trim() ? undefined : "Try another search or filter."} />
         ) : shownTxs.length > 0 ? (
           <Card style={{ paddingVertical: space.sm, gap: 0 }}>

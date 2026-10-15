@@ -11,7 +11,6 @@ import { channelInfo, describeDetails } from "../lib/channels";
 import { formatDecimal, formatSats } from "../lib/money";
 import { swapProfit } from "../lib/earnings";
 import { countdown, describeSwap, shortPk, timeAgo } from "../lib/swapView";
-import { npub } from "../lib/links";
 import { type DisputeClass } from "../protocol/constants";
 import { parseOffer } from "../protocol/offer";
 import { parsePrivateTerms } from "../protocol/payloads";
@@ -209,7 +208,7 @@ export function SwapDetailScreen() {
     if (view.action === "pay")
       return (
         <Button
-          title={ch.fields.length ? "I've sent the money" : `I've handed over ${view.fiatLabel}`}
+          title={ch.fields.length ? "I've sent it" : "I've paid"}
           icon="check"
           loading={busy === "pay"}
           disabled={iReceiveBtc && !lock?.ok}
@@ -220,7 +219,7 @@ export function SwapDetailScreen() {
     if (view.action === "confirm")
       return (
         <Button
-          title={`I've received ${view.fiatLabel}`}
+          title="I've received it"
           icon="check-circle"
           loading={busy === "confirm"}
           onPress={async () => {
@@ -252,14 +251,13 @@ export function SwapDetailScreen() {
       right={
         <Pressable onPress={() => nav.navigate("Chat", { id })} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.surface, alignItems: "center", justifyContent: "center" }}>
           <Feather name="message-circle" size={19} color={c.text} />
-          {unread > 0 && <View style={{ position: "absolute", top: 6, right: 6, width: 9, height: 9, borderRadius: 5, backgroundColor: c.accent }} />}
+          {unread > 0 && <View style={{ position: "absolute", top: 6, right: 6, width: 9, height: 9, borderRadius: 5, backgroundColor: root.terms.direction === "fiat_to_btc" ? c.primaryInk : c.positive }} />}
         </Pressable>
       }
       footer={primary}
       onRefresh={() => void engine.refreshSwap(id)}
     >
       <View style={{ gap: space.md }}>
-        <Badge label={view.title.toUpperCase()} tone="neutral" />
         {st.status === "settled" ? (
           <SwapCelebration
             play={false}
@@ -279,7 +277,6 @@ export function SwapDetailScreen() {
             <Text muted>{checkingLock ? `Making sure ${view.satsLabel} are set aside for you before you pay.` : view.detail}</Text>
           </>
         )}
-        {!["declined", "cancelled", "expired", "settled"].includes(st.status) && <Steps step={iReceiveBtc && st.status === "secured" && !lock?.ok ? Math.min(view.step, 1) : view.step} tone={view.tone === "danger" ? "danger" : "ok"} />}
         {deadline && now < deadline.at && !st.disputed && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Feather name="clock" size={14} color={tone.fg} />
@@ -310,19 +307,14 @@ export function SwapDetailScreen() {
 
       {/* Lock status for whoever is receiving bitcoin */}
       {iReceiveBtc && ["secured", "fiat_sent", "fiat_confirmed", "settlement_authorized"].includes(st.status) && (
-        <Card tone={lock?.ok ? "primary" : "alt"} style={{ flexDirection: "row", alignItems: "center" }}>
-          <Feather name={lock?.ok ? "lock" : "loader"} size={20} color={lock?.ok ? c.primaryInk : c.textMuted} />
-          <View style={{ flex: 1 }}>
-            <Text variant="label">{lock?.ok ? `${view.satsLabel} set aside for you` : "Checking…"}</Text>
-            <Text variant="caption" muted>
-              {lock?.ok ? "Checked in your own wallet. It's yours once the payment is confirmed." : (lock?.reason ?? "Looking in your wallet")}
-            </Text>
-          </View>
-        </Card>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <Feather name={lock?.ok ? "lock" : "clock"} size={16} color={tone.fg} />
+          <Text variant="caption" muted>{lock?.ok ? `${view.satsLabel} secured` : lock?.reason ?? "Checking your wallet…"}</Text>
+        </View>
       )}
 
       {/* Payment instructions for whoever sends fiat */}
-      {iPayFiat && (st.status === "secured" || (st.status === "fiat_sent" && ch.fields.length > 0)) && (
+      {iPayFiat && ch.fields.length > 0 && (st.status === "secured" || st.status === "fiat_sent") && (
         <Section title={ch.fields.length ? (st.status === "secured" ? "Send the money to" : "You sent the money to") : st.status === "secured" ? "Pay in cash" : "You paid in cash"}>
           {payTo ? (
             <Card>
@@ -332,11 +324,11 @@ export function SwapDetailScreen() {
                 // The payer needs the real number to pay it; masking is for showing details to others.
                 d.copyValue ? <CopyField key={d.label} value={d.copyValue} label={d.label} /> : <KeyValue key={d.label} label={d.label} value={d.value} />,
               )}
-              {st.status === "secured" && ch.payerInstructions.map((line) => (
+              {st.status === "secured" && ch.payerInstructions.length > 0 && <Collapsible title="Payment instructions">{ch.payerInstructions.map((line) => (
                 <Text key={line} variant="caption" muted>
                   {line}
                 </Text>
-              ))}
+              ))}</Collapsible>}
               {rec.local.referenceText && <KeyValue label={`Your ${ch.referenceLabel.toLowerCase()}`} value={rec.local.referenceText} />}
             </Card>
           ) : (
@@ -357,6 +349,8 @@ export function SwapDetailScreen() {
 
       <Collapsible title="Details" summary={`${view.fiatLabel} · ${formatSats(root.terms.bitcoin.amount)} · ${ch.short}`}>
         <Card>
+          <Steps step={view.step} tone={view.tone === "danger" ? "danger" : "ok"} />
+          <Text variant="caption" muted>Bitcoin stays locked until the cash or account payment is confirmed.</Text>
           <KeyValue label="Amount" value={view.fiatLabel} />
           <KeyValue label="Bitcoin" value={formatSats(root.terms.bitcoin.amount)} />
           <KeyValue
@@ -370,25 +364,20 @@ export function SwapDetailScreen() {
           <KeyValue label={isAgent ? "Customer" : "Agent"} value={rec.local.counterpartyName ?? shortPk(counterparty!)} />
           <KeyValue label="Started" value={timeAgo(root.createdAt, now)} />
         </Card>
-      </Collapsible>
-
-      <Collapsible title="Public record">
-        <Card>
-          <Text variant="caption" muted>
-            Each step below is signed and published, so either side can prove what happened. Payment details never appear here.
-          </Text>
-          <KeyValue label="Created" value={shortTime(root.createdAt)} />
-          {st.chain.map((a) => (
-            <KeyValue
-              key={a.id}
-              label={ACTION_LABELS[a.action] ?? a.action}
-              value={`${signedBy(a.signer)} · ${new Date(a.createdAt * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`}
-            />
-          ))}
-          {st.forked && <Notice tone="danger">Forked: {st.forkIds.length} competing actions.</Notice>}
-          <CopyField value={root.id} label="Swap ID" short />
-          <CopyField value={npub(counterparty!)} label={isAgent ? "Customer ID" : "Agent ID"} short />
-        </Card>
+        <Collapsible title="History">
+          <Card>
+            <KeyValue label="Created" value={shortTime(root.createdAt)} />
+            {st.chain.map((a) => (
+              <KeyValue
+                key={a.id}
+                label={ACTION_LABELS[a.action] ?? a.action}
+                value={`${signedBy(a.signer)} · ${new Date(a.createdAt * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`}
+              />
+            ))}
+            {st.forked && <Notice tone="danger">Forked: {st.forkIds.length} competing actions.</Notice>}
+            <CopyField value={root.id} label="Swap ID" short />
+          </Card>
+        </Collapsible>
       </Collapsible>
 
       <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>

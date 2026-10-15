@@ -2,10 +2,12 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
   getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined), removeItem: jest.fn(async () => undefined),
 }));
 jest.mock("../services/wallet", () => ({
-  balances: jest.fn(), listTransactions: jest.fn(), holdIn: jest.fn(), syncWallet: jest.fn(),
+  balances: jest.fn(), listTransactions: jest.fn(), holdIn: jest.fn(), syncWallet: jest.fn(), connect: jest.fn(), onWalletEvent: jest.fn(() => () => undefined), fiatRates: jest.fn(), lightningAddressInfo: jest.fn(async () => null),
 }));
+jest.mock("../services/activityCache", () => ({ readActivityCache: jest.fn(async () => null), writeActivityCache: jest.fn(async () => undefined), clearActivityCache: jest.fn(async () => undefined) }));
 
 import * as wallet from "../services/wallet";
+import { readActivityCache } from "../services/activityCache";
 import { useWallet } from "./wallet";
 
 beforeEach(async () => {
@@ -14,6 +16,7 @@ beforeEach(async () => {
   useWallet.getState().reset();
   jest.mocked(wallet.balances).mockResolvedValue({ sats: 1000n, usd: 0 });
   jest.mocked(wallet.holdIn).mockResolvedValue("bitcoin");
+  jest.mocked(wallet.fiatRates).mockResolvedValue({ USD: 100000 });
   jest.mocked(wallet.listTransactions).mockResolvedValue([]);
 });
 
@@ -55,4 +58,42 @@ it("coalesces overlapping foreground syncs into one network call and refresh", a
   finish();
   await Promise.all([first, second]);
   expect(wallet.balances).toHaveBeenCalledTimes(1);
+});
+
+const cachedTx: wallet.WalletTx = { id: "cached-pending", direction: "in", amountSats: 2000n, feeSats: 0n, kind: "onchain", status: "pending", timestamp: 100 };
+
+it("shows cached activity before the wallet connects without crediting pending funds", async () => {
+  let connected!: () => void;
+  jest.mocked(wallet.connect).mockImplementationOnce(() => new Promise((resolve) => { connected = () => resolve(undefined as never); }));
+  jest.mocked(readActivityCache).mockResolvedValueOnce([cachedTx]);
+  const starting = useWallet.getState().start("mainnet.alice");
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(useWallet.getState()).toMatchObject({ status: "connecting", activityLoaded: true, txs: [cachedTx], balance: null });
+  connected();
+  await starting;
+});
+
+it("does not let a late cache overwrite fresh wallet activity", async () => {
+  let cached!: (txs: wallet.WalletTx[]) => void;
+  jest.mocked(readActivityCache).mockImplementationOnce(() => new Promise((resolve) => { cached = resolve; }));
+  const fresh = { ...cachedTx, id: "fresh", status: "complete" as const };
+  jest.mocked(wallet.listTransactions).mockResolvedValue([fresh]);
+  await useWallet.getState().start("mainnet.alice");
+  cached([cachedTx]);
+  await Promise.resolve();
+  expect(useWallet.getState().txs).toEqual([fresh]);
+});
+
+it("rejects the previous account's late cache and connection after reset", async () => {
+  let cached!: (txs: wallet.WalletTx[]) => void;
+  let connected!: () => void;
+  jest.mocked(readActivityCache).mockImplementationOnce(() => new Promise((resolve) => { cached = resolve; }));
+  jest.mocked(wallet.connect).mockImplementationOnce(() => new Promise((resolve) => { connected = () => resolve(undefined as never); }));
+  const starting = useWallet.getState().start("mainnet.alice");
+  useWallet.getState().reset();
+  cached([cachedTx]);
+  connected();
+  await starting;
+  expect(useWallet.getState()).toMatchObject({ status: "idle", activityLoaded: false, txs: [], balance: null });
 });

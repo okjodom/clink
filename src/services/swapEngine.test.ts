@@ -9,7 +9,7 @@ jest.mock("@react-native-async-storage/async-storage", () => {
 jest.mock("./secure", () => ({
   getSecret: jest.fn(async () => "cc".repeat(32)), setSecret: jest.fn(async () => undefined),
 }));
-jest.mock("./wallet", () => ({ findHtlc: jest.fn() }));
+jest.mock("./wallet", () => ({ findHtlc: jest.fn(), onWalletEvent: jest.fn(() => () => undefined) }));
 jest.mock("./nostr", () => ({
   query: jest.fn(async () => []),
   publish: jest.fn(async (event) => event),
@@ -65,6 +65,7 @@ function announce(id: string, paymentHash = hash) {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  jest.spyOn(Date, "now").mockReturnValue(1000_000);
   jest.mocked(nostr.query).mockResolvedValue([]);
   await hydrateSwaps();
   useSwaps.getState().clear();
@@ -73,6 +74,12 @@ beforeEach(async () => {
 });
 
 afterEach(() => jest.restoreAllMocks());
+
+it("rejects a locally recorded waiting lock once its actual expiry passes", async () => {
+  const id = swap(); announce(id);
+  jest.spyOn(Date, "now").mockReturnValue(14400_000);
+  expect(await verifyIncomingLock(id)).toMatchObject({ ok: false, reason: "Lock has expired" });
+});
 
 const customerRing: KeyRing = { identity: { pk: customer, sk: customerSk }, escrow: { pk: escrow, sk: escrowSk }, resolver: { pk: agent, sk: agentSk } };
 const agentRing: KeyRing = { ...customerRing, identity: { pk: agent, sk: agentSk } };

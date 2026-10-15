@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import * as wallet from "../services/wallet";
 import type { WalletTx } from "../services/wallet";
+import { clearActivityCache, readActivityCache, writeActivityCache } from "../services/activityCache";
 
 interface WalletState {
   status: "idle" | "connecting" | "ready" | "error";
@@ -15,11 +16,14 @@ interface WalletState {
   usd: number;
   holdIn: wallet.HoldIn;
   txs: WalletTx[];
+  activityLoaded: boolean;
+  activityRefreshing: boolean;
+  activitySyncing: boolean;
   rates: Record<string, number>;
   lightningAddress: string | null;
   /** LNURL-pay code for the address: a QR any wallet can pay, any time. */
   lnurl: string | null;
-  start(): Promise<void>;
+  start(owner?: string): Promise<void>;
   refresh(): Promise<void>;
   sync(): Promise<void>;
   refreshRates(): Promise<void>;
@@ -44,6 +48,8 @@ let unsubscribe: (() => void) | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshVersion = 0;
 let foregroundSync: Promise<void> | null = null;
+let activityOwner: string | null = null;
+let walletEpoch = 0;
 
 // Balance, rates and address are cached so the wallet opens on numbers, not a spinner.
 export const useWallet = create<WalletState>()(
@@ -55,15 +61,27 @@ export const useWallet = create<WalletState>()(
   usd: 0,
   holdIn: "bitcoin",
   txs: [],
+  activityLoaded: false,
+  activityRefreshing: false,
+  activitySyncing: false,
   rates: {},
   lightningAddress: null,
   lnurl: null,
 
-  async start() {
+  async start(owner) {
     if (get().status === "connecting" || get().status === "ready") return;
+    if (owner) activityOwner = owner;
+    const cacheOwner = activityOwner;
+    const epoch = walletEpoch;
+    if (cacheOwner) void readActivityCache(cacheOwner).then((txs) => {
+      if (txs && epoch === walletEpoch && !get().activityLoaded) {
+        set({ txs: valued({ sats: BigInt(get().sats ?? 0), usd: get().usd }, txs, get().rates.USD).txs, activityLoaded: true });
+      }
+    }).catch(() => undefined);
     set({ status: "connecting", error: undefined });
     try {
       await wallet.connect();
+      if (epoch !== walletEpoch) return;
       unsubscribe?.();
       unsubscribe = wallet.onWalletEvent(() => {
         // Events arrive in bursts; coalesce into one refresh.
@@ -75,27 +93,39 @@ export const useWallet = create<WalletState>()(
       void get().sync();
       wallet
         .lightningAddressInfo()
-        .then((a) => set({ lightningAddress: a?.address ?? null, lnurl: a?.lnurl ?? null }))
+        .then((a) => { if (epoch === walletEpoch) set({ lightningAddress: a?.address ?? null, lnurl: a?.lnurl ?? null }); })
         .catch(() => undefined);
     } catch (e) {
-      set({ status: "error", error: (e as Error).message });
+      if (epoch === walletEpoch) set({ status: "error", error: (e as Error).message });
     }
   },
 
   async refresh() {
     const version = ++refreshVersion;
+    const cacheOwner = activityOwner;
+    set({ activityRefreshing: true });
     try {
-      const [b, txs, holdIn] = await Promise.all([wallet.balances(), wallet.listTransactions(60), wallet.holdIn().catch(() => get().holdIn)]);
-      if (version !== refreshVersion) return;
-      set({ ...valued(b, txs, get().rates.USD), holdIn, error: undefined });
+      await Promise.all([
+        wallet.listTransactions(60).then((txs) => {
+          if (version !== refreshVersion) return;
+          set({ txs: valued({ sats: BigInt(get().sats ?? 0), usd: get().usd }, txs, get().rates.USD).txs, activityLoaded: true });
+          if (cacheOwner) void writeActivityCache(cacheOwner, txs).catch(() => undefined);
+        }),
+        Promise.all([wallet.balances(), wallet.holdIn().catch(() => get().holdIn)]).then(([b, holdIn]) => {
+          if (version === refreshVersion) set({ ...valued(b, get().txs, get().rates.USD), holdIn, error: undefined });
+        }),
+      ]);
     } catch (e) {
       if (version === refreshVersion) set({ error: (e as Error).message });
+    } finally {
+      if (version === refreshVersion) set({ activityRefreshing: false });
     }
   },
 
   async sync() {
     if (get().status !== "ready") return;
     if (foregroundSync) return foregroundSync;
+    set({ activitySyncing: true });
     const running = (async () => {
       try {
         await wallet.syncWallet();
@@ -106,7 +136,7 @@ export const useWallet = create<WalletState>()(
     })();
     foregroundSync = running;
     try { await running; }
-    finally { if (foregroundSync === running) foregroundSync = null; }
+    finally { if (foregroundSync === running) { foregroundSync = null; set({ activitySyncing: false }); } }
   },
 
   async refreshRates() {
@@ -134,13 +164,16 @@ export const useWallet = create<WalletState>()(
   },
 
   reset() {
+    walletEpoch++;
     refreshVersion++;
+    if (activityOwner) void clearActivityCache(activityOwner).catch(() => undefined);
+    activityOwner = null;
     foregroundSync = null;
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = null;
     unsubscribe?.();
     unsubscribe = null;
-    set({ status: "idle", balance: null, sats: null, usd: 0, holdIn: "bitcoin", txs: [], lightningAddress: null, lnurl: null, error: undefined });
+    set({ status: "idle", balance: null, sats: null, usd: 0, holdIn: "bitcoin", txs: [], activityLoaded: false, activityRefreshing: false, activitySyncing: false, lightningAddress: null, lnurl: null, error: undefined });
   },
   }),
   {

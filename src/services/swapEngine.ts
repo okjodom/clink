@@ -63,6 +63,7 @@ let actionSub: (() => void) | null = null;
 let actionSubKey = "";
 let tick: ReturnType<typeof setInterval> | null = null;
 const queues = new Map<string, Promise<void>>();
+const reschedule = new Set<string>();
 const listeners = new Set<() => void>();
 
 function k(): KeyRing {
@@ -87,6 +88,7 @@ export function startEngine(ring: KeyRing) {
 function beginEngine(ring: KeyRing) {
   const me = ring.identity.pk;
   stopFns.push(
+    wallet.onWalletEvent(() => { for (const id of activeIds()) schedule(id); }),
     subscribe([{ kinds: [KIND.root], "#p": [me] }], (e) => void ingestRoot(e)),
     subscribe([{ kinds: [KIND.giftWrap], "#p": [me], since: now() - WRAP_LOOKBACK }], (e) => void ingestWrap(e)),
     useSwaps.subscribe(() => refreshActionSubscription()),
@@ -113,6 +115,7 @@ export function resumeEngine() {
 
 export function stopEngine() {
   generation++;
+  reschedule.clear();
   stopFns.forEach((f) => f());
   stopFns = [];
   actionSub?.();
@@ -294,6 +297,7 @@ export async function verifyIncomingLock(id: string): Promise<LockCheck> {
     return { ok: false, reason: "Lock is no longer claimable", tx };
   if ((tx.htlc?.expiresAt ?? 0) < st.root.terms.deadlines.fiat_confirm_by)
     return { ok: false, reason: "Lock expires before the swap deadline", tx };
+  if ((tx.htlc?.expiresAt ?? 0) <= now()) return { ok: false, reason: "Lock has expired", tx };
   if (!useSwaps.getState().bindPayment(id, expected, tx.id)) return { ok: false, reason: "Payment is already bound to another swap", tx };
   await persistPaymentBindings();
   return { ok: true, tx };
@@ -302,8 +306,11 @@ export async function verifyIncomingLock(id: string): Promise<LockCheck> {
 // -- duties ------------------------------------------------------------------
 
 export function schedule(id: string) {
-  const prev = queues.get(id) ?? Promise.resolve();
-  const next = prev
+  if (!keys) return;
+  // SDK events and relay updates arrive in bursts. One follow-up reads the
+  // latest state; queuing every notification repeats work and grows without bound.
+  if (queues.has(id)) { reschedule.add(id); return; }
+  const next = Promise.resolve()
     .then(() => runDuties(id))
     .catch((e: unknown) => {
       if (__DEV__) console.warn(`[swap ${id.slice(0, 8)}] duty failed:`, errorText(e));
@@ -312,6 +319,7 @@ export function schedule(id: string) {
     .finally(() => {
       if (queues.get(id) === next) queues.delete(id);
       listeners.forEach((l) => l());
+      if (reschedule.delete(id) && keys) schedule(id);
     });
   queues.set(id, next);
 }
