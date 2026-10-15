@@ -14,6 +14,7 @@ jest.mock("./nostr", () => ({
   query: jest.fn(async () => []),
   publish: jest.fn(async (event) => event),
   sign: jest.fn((template, sk) => require("nostr-tools/pure").finalizeEvent(template, sk)),
+  subscribe: jest.fn(() => () => undefined), resetPool: jest.fn(),
 }));
 jest.mock("../store/agent", () => ({}));
 jest.mock("../store/session", () => ({}));
@@ -23,7 +24,7 @@ import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools/pure
 import { actionTemplate, rootTemplate } from "../protocol/events";
 import { SWAP_PROFILE } from "../protocol/constants";
 import { useSwaps, hydrateSwaps, persistPaymentBindings, swapState } from "../store/swaps";
-import { closeOverdueSwap, verifyIncomingLock } from "./swapEngine";
+import { closeOverdueSwap, onEngineChange, resumeEngine, startEngine, stopEngine, verifyIncomingLock } from "./swapEngine";
 import * as nostr from "./nostr";
 import type { KeyRing } from "../lib/keys";
 import { describeSwap } from "../lib/swapView";
@@ -137,6 +138,8 @@ it("closes an accepted swap once the wallet confirms its lock returned", async (
   jest.spyOn(Date, "now").mockReturnValue(20000_000);
   jest.mocked(wallet.findHtlc).mockResolvedValue({ id: "returned", timestamp: 1000, htlc: { paymentHash: hash, status: "returned", expiresAt: 14400 } } as wallet.WalletTx);
   expect(await closeOverdueSwap(id, customerRing)).toBe(true);
+  expect(wallet.findHtlc).toHaveBeenCalledTimes(1);
+  expect(wallet.findHtlc).toHaveBeenCalledWith(expect.any(String), "out", { skipSync: true, fullHistory: true });
 });
 
 it("does not mistake an older returned payment for a newer unresolved lock attempt", async () => {
@@ -162,6 +165,26 @@ it("leaves the swap pending if the wallet check cannot establish its funding sta
   await expect(closeOverdueSwap(id, customerRing)).rejects.toThrow("offline");
   expect(nostr.publish).not.toHaveBeenCalled();
   expect(swapState(useSwaps.getState().records[id]).status).toBe("accepted");
+});
+
+it("automatically closes a returned overdue lock when the engine starts and resumes", async () => {
+  Object.assign(globalThis, { __DEV__: false });
+  const id = swap(); accept(id);
+  jest.spyOn(Date, "now").mockReturnValue(20000_000);
+  jest.mocked(wallet.findHtlc).mockResolvedValue({ id: "returned", timestamp: 1000, htlc: { paymentHash: hash, status: "returned", expiresAt: 14400 } } as wallet.WalletTx);
+  let finished!: () => void;
+  const done = new Promise<void>((resolve) => { finished = resolve; });
+  const unsubscribe = onEngineChange(finished);
+  const timeout = setTimeout(finished, 1000);
+  try {
+    startEngine(customerRing);
+    resumeEngine();
+    await done;
+    expect(swapState(useSwaps.getState().records[id]).status).toBe("cancelled");
+    expect(nostr.publish).toHaveBeenCalledTimes(1);
+  } finally {
+    unsubscribe(); clearTimeout(timeout); stopEngine();
+  }
 });
 
 it("allows only one swap to verify a shared HTLC concurrently and retains the binding after reload", async () => {

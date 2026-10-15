@@ -344,8 +344,11 @@ export async function closeOverdueSwap(id: string, ring: KeyRing = k()): Promise
   const bound = Object.entries(useSwaps.getState().paymentBindings).filter(([, binding]) => binding.coordination === id).map(([hash]) => hash);
   if (bound.length > 1 || (announced && bound[0] && announced !== bound[0])) throw new Error("Can't verify this swap's payment hash before closing it");
   const hash = announced ?? bound[0] ?? paymentHashOf(htlcPreimage(ring.identity.sk, id));
-  // Absence is useful evidence only after a successful sync and a complete history read.
-  const tx = await wallet.findHtlc(hash, "out", { requireSync: true, fullHistory: true });
+  // A returned payment cannot become paid later. Read it before waiting on network
+  // sync; absence or an unresolved payment still requires a successful fresh check.
+  const cached = await wallet.findHtlc(hash, "out", { skipSync: true, fullHistory: true });
+  const tx = cached?.htlc?.status === "returned" ? cached
+    : await wallet.findHtlc(hash, "out", { requireSync: true, fullHistory: true });
   if (tx && tx.htlc?.status !== "returned") return false;
   const lockMayBeInFlight = rec.local.lockStartedAt || rec.local.lockTxId || rec.inbox.some((i) => i.from === me && i.payload?.type === "locked");
   const newerAttempt = rec.local.lockStartedAt && tx && tx.timestamp < rec.local.lockStartedAt;

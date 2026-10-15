@@ -818,10 +818,10 @@ export async function claimHtlc(preimage: string): Promise<WalletTx> {
 }
 
 /** Find our side of an HTLC by payment hash, sent or received. */
-export async function findHtlc(paymentHash: string, direction: "in" | "out", options?: { requireSync?: boolean; fullHistory?: boolean }): Promise<WalletTx | null> {
+export async function findHtlc(paymentHash: string, direction: "in" | "out", options?: { requireSync?: boolean; fullHistory?: boolean; skipSync?: boolean }): Promise<WalletTx | null> {
   const s = await connect();
-  if (options?.requireSync) await s.syncWallet({});
-  else await s.syncWallet({}).catch(() => undefined);
+  if (options?.requireSync) await syncWallet();
+  else if (!options?.skipSync) await syncWallet().catch(() => undefined);
   const { payments } = await s.listPayments({
     typeFilter: [direction === "in" ? PaymentType.Receive : PaymentType.Send],
     statusFilter: undefined,
