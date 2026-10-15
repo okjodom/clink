@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import * as wallet from "../services/wallet";
 import type { WalletTx } from "../services/wallet";
 import { clearActivityCache, readActivityCache, writeActivityCache } from "../services/activityCache";
+import { errorText } from "../lib/errors";
 
 interface WalletState {
   status: "idle" | "connecting" | "ready" | "error";
@@ -96,7 +97,7 @@ export const useWallet = create<WalletState>()(
         .then((a) => { if (epoch === walletEpoch) set({ lightningAddress: a?.address ?? null, lnurl: a?.lnurl ?? null }); })
         .catch(() => undefined);
     } catch (e) {
-      if (epoch === walletEpoch) set({ status: "error", error: (e as Error).message });
+      if (epoch === walletEpoch) set({ status: "error", error: errorText(e) });
     }
   },
 
@@ -112,11 +113,12 @@ export const useWallet = create<WalletState>()(
           if (cacheOwner) void writeActivityCache(cacheOwner, txs).catch(() => undefined);
         }),
         Promise.all([wallet.balances(), wallet.holdIn().catch(() => get().holdIn)]).then(([b, holdIn]) => {
-          if (version === refreshVersion) set({ ...valued(b, get().txs, get().rates.USD), holdIn, error: undefined });
+          if (version === refreshVersion) set({ ...valued(b, get().txs, get().rates.USD), holdIn });
         }),
       ]);
+      if (version === refreshVersion) set({ error: undefined });
     } catch (e) {
-      if (version === refreshVersion) set({ error: (e as Error).message });
+      if (version === refreshVersion) set({ error: errorText(e) });
     } finally {
       if (version === refreshVersion) set({ activityRefreshing: false });
     }

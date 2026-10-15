@@ -62,6 +62,19 @@ it("coalesces overlapping foreground syncs into one network call and refresh", a
 
 const cachedTx: wallet.WalletTx = { id: "cached-pending", direction: "in", amountSats: 2000n, feeSats: 0n, kind: "onchain", status: "pending", timestamp: 100 };
 
+it("preserves the underlying SDK explanation when connection fails", async () => {
+  const error = Object.assign(new Error("SdkError.Generic"), { inner: ["Invalid API key certificate"] });
+  jest.mocked(wallet.connect).mockRejectedValueOnce(error);
+  await useWallet.getState().start("mainnet.alice");
+  expect(useWallet.getState()).toMatchObject({ status: "error", error: "SdkError.Generic: Invalid API key certificate" });
+});
+
+it("preserves the underlying SDK explanation when refreshing fails", async () => {
+  jest.mocked(wallet.listTransactions).mockRejectedValueOnce(Object.assign(new Error("SdkError.NetworkError"), { inner: ["Connection timed out"] }));
+  await useWallet.getState().refresh();
+  expect(useWallet.getState().error).toBe("SdkError.NetworkError: Connection timed out");
+});
+
 it("shows cached activity before the wallet connects without crediting pending funds", async () => {
   let connected!: () => void;
   jest.mocked(wallet.connect).mockImplementationOnce(() => new Promise((resolve) => { connected = () => resolve(undefined as never); }));

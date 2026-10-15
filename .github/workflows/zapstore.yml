@@ -71,6 +71,8 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
         run: |
+          python3 -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read("assets/app.config"))' "$RUNNER_TEMP/zapstore-apk/clink-$TAG.apk" > "$RUNNER_TEMP/apk-config.json"
+          node scripts/check-breez-api-key.mjs "$RUNNER_TEMP/apk-config.json"
           "$RUNNER_TEMP/zsp" utils extract-apk "$RUNNER_TEMP/zapstore-apk/clink-$TAG.apk" > "$RUNNER_TEMP/apk.json"
           node scripts/prepare-zapstore.mjs --verify-apk "$TAG" "$RUNNER_TEMP/apk.json"
 

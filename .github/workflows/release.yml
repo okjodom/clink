@@ -75,6 +75,13 @@ jobs:
           cd "$RUNNER_TEMP/prebuilt"
           sha256sum --check *.sha256
 
+      - name: Validate the API key in the prebuilt APK
+        if: ${{ steps.find.outputs.run_id != '' }}
+        run: |
+          apk=$(ls "$RUNNER_TEMP"/prebuilt/*.apk)
+          python3 -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read("assets/app.config"))' "$apk" > "$RUNNER_TEMP/apk-config.json"
+          node scripts/check-breez-api-key.mjs "$RUNNER_TEMP/apk-config.json"
+
       - name: Verify the APK is ours and matches the release
         if: ${{ steps.find.outputs.run_id != '' }}
         env:
