@@ -6,6 +6,7 @@
  * (see lib/keys.ts), so one backup restores everything.
  */
 import { Paths } from "expo-file-system";
+import { readWalletState } from "./walletRead";
 import {
   connect as breezConnect,
   ConversionInfo,
@@ -820,21 +821,20 @@ export async function claimHtlc(preimage: string): Promise<WalletTx> {
 /** Find our side of an HTLC by payment hash, sent or received. */
 export async function findHtlc(paymentHash: string, direction: "in" | "out", options?: { requireSync?: boolean; fullHistory?: boolean; skipSync?: boolean }): Promise<WalletTx | null> {
   const s = await connect();
-  if (options?.requireSync) await syncWallet();
-  else if (!options?.skipSync) await syncWallet().catch(() => undefined);
-  const { payments } = await s.listPayments({
-    typeFilter: [direction === "in" ? PaymentType.Receive : PaymentType.Send],
-    statusFilter: undefined,
-    assetFilter: undefined,
-    paymentDetailsFilter: undefined,
-    fromTimestamp: undefined,
-    toTimestamp: undefined,
-    offset: undefined,
-    limit: options?.fullHistory ? undefined : 200,
-    sortAscending: false,
-  });
-  const match = payments.map(withHtlc).find((t) => t.htlc?.paymentHash === paymentHash);
-  return match ?? null;
+  return readWalletState(async () => {
+    const { payments } = await s.listPayments({
+      typeFilter: [direction === "in" ? PaymentType.Receive : PaymentType.Send],
+      statusFilter: undefined,
+      assetFilter: undefined,
+      paymentDetailsFilter: undefined,
+      fromTimestamp: undefined,
+      toTimestamp: undefined,
+      offset: undefined,
+      limit: options?.fullHistory ? undefined : 200,
+      sortAscending: false,
+    });
+    return payments.map(withHtlc).find((t) => t.htlc?.paymentHash === paymentHash) ?? null;
+  }, syncWallet, options);
 }
 
 /** A payment with its HTLC view, including Lightning hold-invoice payments. */

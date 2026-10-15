@@ -13,7 +13,7 @@ import { rankOffers, useDiscovery, usePayouts, type Match } from "../store/disco
 import { useWorthBackingUp } from "../hooks";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
-import { Avatar, Badge, Button, Card, Chip, Field, IconButton, Notice, Row, Screen, Segmented, Spinner, Text, success } from "../ui/components";
+import { Avatar, Badge, Button, Card, Chip, Collapsible, Field, IconButton, Notice, Row, Screen, Segmented, Spinner, Text, success } from "../ui/components";
 import { NumPad, Sheet, toastError } from "../ui/extras";
 import { ChannelFields } from "../ui/channelFields";
 import { KeyValue } from "../ui/rows";
@@ -305,7 +305,8 @@ export function ReviewSwapScreen() {
       )}
 
       <Card tone="alt" style={{ gap: space.md }}>
-        <Text variant="label">How you're protected</Text>
+        <Text variant="caption" muted>Bitcoin stays locked until the payment is confirmed.</Text>
+        <Collapsible title="How this works">
         {(buying
           ? [
               ["lock", `The agent sets aside ${formatSats(q.sats)} for you first. You'll see it in your wallet before you pay.`],
@@ -325,6 +326,7 @@ export function ReviewSwapScreen() {
             </Text>
           </View>
         ))}
+        </Collapsible>
       </Card>
       {needsBackup && (
         <Notice tone="warning" title="Protect your wallet first">

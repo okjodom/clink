@@ -9,7 +9,7 @@ import { Platform, Pressable, type StyleProp, type ViewStyle } from "react-nativ
 import { useActiveSwaps, useMe } from "../hooks";
 import { describeSwap } from "../lib/swapView";
 import { useSession } from "../store/session";
-import { tap } from "../ui/components";
+import { tap, toneColors } from "../ui/components";
 import { useColors, useIsDark } from "../ui/theme";
 import { AgentSetupScreen, DeskScreen } from "../screens/agent";
 import { BackupScreen } from "../screens/backup";
@@ -28,10 +28,11 @@ import { TransactionDetailScreen } from "../screens/transactionDetail";
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function useActionCount() {
+function useActionBadge() {
   const me = useMe();
   const active = useActiveSwaps();
-  return active.filter((i) => describeSwap(i.rec, i.st, me).myTurn).length;
+  const pending = active.map((i) => describeSwap(i.rec, i.st, me)).filter((view) => view.myTurn);
+  return { count: pending.length, tone: pending.find((view) => view.tone === "danger")?.tone ?? pending.find((view) => view.tone === "warning")?.tone ?? pending[0]?.tone ?? "neutral" };
 }
 
 /** Immediate pressed feedback, followed by a tab switch on release. */
@@ -67,11 +68,12 @@ function Tabs() {
     // Wait for Main to regain focus if mode changed inside agent setup.
     nav.navigate("Main", { screen: mode === "agent" ? "Desk" : "Home" });
   }, [mode, focused, nav]);
-  const pending = useActionCount();
+  const pending = useActionBadge();
+  const badgeColors = toneColors(c, pending.tone);
   const icon =
     (name: React.ComponentProps<typeof Feather>["name"]) =>
     ({ color }: { color: string }) => <Feather name={name} size={22} color={color} />;
-  const badge = pending ? { tabBarBadge: pending, tabBarBadgeStyle: { backgroundColor: c.accent, color: c.accentText, fontSize: 11 } } : {};
+  const badge = pending.count ? { tabBarBadge: pending.count, tabBarBadgeStyle: { backgroundColor: badgeColors.bg, color: badgeColors.fg, fontSize: 11 } } : {};
 
   return (
     <Tab.Navigator

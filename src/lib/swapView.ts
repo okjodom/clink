@@ -66,7 +66,7 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
     title,
     headline,
     detail,
-    tone,
+    tone: tone === "accent" || tone === "info" ? (buying ? "warning" : "success") : tone,
     step: STEP_OF[st.status] ?? 0,
     myTurn,
     action,
@@ -112,15 +112,15 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
           ? v(`${capital(them)} isn't answering`, `Nothing is set aside yet. ${capital(them)} needs to open ${BRAND.name} to continue, or you can cancel.`, "warning")
           : v(`Waiting for ${them}`, `${capital(them)} needs ${BRAND.name} open to continue. Nothing is set aside yet.`, "info");
       }
-      if (iSetAside) return v("Setting your money aside", `Your ${sats} are being set aside so ${them} can pay safely.`, "info");
-      return v("Setting money aside", `${capital(them)} is setting aside ${sats} for you.`, "info");
+      if (iSetAside) return v("Setting money aside", `Reserving ${sats}.`, "info");
+      return v("Setting money aside", `Waiting for ${them} to reserve ${sats}.`, "info");
     }
     case "secured":
       if (iPayFiat) {
         if (now >= root.terms.deadlines.fiat_pay_by) return v("Payment window closed", "The money set aside goes back to its owner.", "warning");
         return cash
-          ? v(`Hand over ${fiat}`, `Give ${them} ${fiat} in cash, then tell us it's done.`, "accent", true, "pay")
-          : v(`Send ${fiat}`, `Pay ${them} via ${channel}, then tell us it's done.`, "accent", true, "pay");
+          ? v(`Pay ${fiat}`, `Pay ${them} in cash.`, "accent", true, "pay")
+          : v(`Send ${fiat}`, `Pay ${them} via ${channel}.`, "accent", true, "pay");
       }
       return cash
         ? v(`Waiting for ${fiat}`, `${capital(them)} will hand you ${fiat} in cash.`, "info")
@@ -128,8 +128,8 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
     case "fiat_sent":
       if (iPayFiat) return v("Waiting for confirmation", `${capital(them)} is checking for your ${fiat}.`, "info");
       return cash
-        ? v(`Collect ${fiat}`, `${capital(them)} says they paid ${fiat} in cash. Confirm only once you have it.`, "accent", true, "confirm")
-        : v(`Check your ${channel}`, `${capital(them)} says they sent ${fiat}. Confirm only once it's in your account.`, "accent", true, "confirm");
+        ? v(`Collect ${fiat}`, "Confirm once you have the cash.", "accent", true, "confirm")
+        : v(`Check your ${channel}`, "Confirm once the money reaches your account.", "accent", true, "confirm");
     case "fiat_confirmed":
     case "settlement_authorized":
       return v("Almost done", iPayFiat ? `Your ${sats} are on the way.` : "Sending the money.", "info");
