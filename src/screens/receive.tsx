@@ -5,6 +5,7 @@ import { Pressable, Share, View } from "react-native";
 
 import { BRAND } from "../brand";
 import { useMoney } from "../hooks";
+import { receiveDescription } from "../lib/paymentBrand";
 import * as wallet from "../services/wallet";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
@@ -33,7 +34,7 @@ export function ReceiveScreen() {
   const makeInvoice = async (sats: number) => {
     setBusy(true);
     try {
-      setInvoice(await wallet.receiveInvoice(sats > 0 ? BigInt(sats) : undefined, BRAND.name));
+      setInvoice(await wallet.receiveInvoice(sats > 0 ? BigInt(sats) : undefined, receiveDescription(address?.split("@")[0])));
     } catch (e) {
       toastError(e);
     } finally {

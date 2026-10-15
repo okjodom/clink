@@ -43,6 +43,7 @@ import { isValidMnemonic, newMnemonic, normaliseMnemonic } from "../lib/keys";
 import { BRAND } from "../brand";
 import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBaseUnits, toBaseUnits } from "../lib/stablecoins";
 import { usernameFrom } from "../lib/username";
+import { paymentDescription, receiveDescription, refreshAddressBrand } from "../lib/paymentBrand";
 
 export { usernameFrom };
 
@@ -299,7 +300,8 @@ export function toTx(p: Payment): WalletTx {
         : p.method === PaymentMethod.Deposit || p.method === PaymentMethod.Withdraw
           ? "onchain"
           : "other";
-  const description = d && PaymentDetails.Lightning.instanceOf(d) ? d.inner.description : undefined;
+  const lightning = d && PaymentDetails.Lightning.instanceOf(d) ? d.inner : undefined;
+  const description = paymentDescription(lightning?.description, lightning?.lnurlPayInfo?.lnAddress);
   return {
     id: p.id,
     direction: p.paymentType === PaymentType.Send ? "out" : "in",
@@ -308,7 +310,7 @@ export function toTx(p: Payment): WalletTx {
     status: p.status === PaymentStatus.Completed ? "complete" : p.status === PaymentStatus.Failed ? "failed" : "pending",
     timestamp: Number(p.timestamp),
     kind,
-    description: description ?? undefined,
+    description,
     htlc,
     ...(token
       ? { amountSats: 0n, feeSats: 0n, usd: fromBaseUnits(BigInt(p.amount), token.decimals), feeUsd: fromBaseUnits(BigInt(p.fees), token.decimals) }
@@ -367,7 +369,8 @@ export interface AddressInfo {
 
 export async function lightningAddressInfo(): Promise<AddressInfo | null> {
   const s = await connect();
-  const info = await s.getLightningAddress();
+  const existing = await s.getLightningAddress();
+  const info = existing ? await refreshAddressBrand(existing, (username, description) => s.registerLightningAddress({ username, description })) : null;
   return info ? { address: info.lightningAddress, lnurl: info.lnurl.bech32 } : null;
 }
 
@@ -377,7 +380,7 @@ export async function claimLightningAddress(username: string): Promise<AddressIn
   if (!/^[a-z0-9][a-z0-9._-]{2,30}$/.test(clean)) throw new Error("Use 3–31 letters, numbers, dots or dashes.");
   const free = await s.checkLightningAddressAvailable({ username: clean });
   if (!free) throw new Error("That name is taken. Try another.");
-  const info = await s.registerLightningAddress({ username: clean, description: `${BRAND.name} wallet` });
+  const info = await s.registerLightningAddress({ username: clean, description: receiveDescription(clean) });
   return { address: info.lightningAddress, lnurl: info.lnurl.bech32 };
 }
 
@@ -399,7 +402,7 @@ export async function reclaimLightningAddress(username: string): Promise<Address
   if (existing) return existing;
   const s = await connect();
   if (!(await s.checkLightningAddressAvailable({ username }))) return null;
-  const info = await s.registerLightningAddress({ username, description: `${BRAND.name} wallet` });
+  const info = await s.registerLightningAddress({ username, description: receiveDescription(username) });
   return { address: info.lightningAddress, lnurl: info.lnurl.bech32 };
 }
 
@@ -413,7 +416,7 @@ export async function claimFirstFree(base: string): Promise<AddressInfo> {
   const candidates = [root, ...Array.from({ length: 5 }, (_, i) => `${root}${Math.floor(Math.random() * 10 ** (i + 1))}`)];
   for (const username of candidates) {
     if (await s.checkLightningAddressAvailable({ username })) {
-      const info = await s.registerLightningAddress({ username, description: `${BRAND.name} wallet` });
+      const info = await s.registerLightningAddress({ username, description: receiveDescription(username) });
       return { address: info.lightningAddress, lnurl: info.lnurl.bech32 };
     }
   }
@@ -444,7 +447,7 @@ function fromInput(input: InputType, raw: string, amountHint?: bigint): ParsedIn
       type: "bolt11",
       raw: d.invoice.bolt11,
       amountSats: d.amountMsat !== undefined ? BigInt(d.amountMsat) / 1000n : undefined,
-      description: d.description ?? undefined,
+      description: paymentDescription(d.description ?? undefined),
     };
   }
   if (InputType.LightningAddress.instanceOf(input)) {

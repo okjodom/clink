@@ -22,6 +22,19 @@ export interface ContactObservation {
   at: number;
 }
 
+export function hasContactUsername(contact: Pick<Contact, "address">): boolean {
+  return typeof contact.address === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.address);
+}
+
+export function readContactProfile(content: string): { address: string; name?: string } | null {
+  try {
+    const profile = JSON.parse(content);
+    if (!hasContactUsername({ address: profile?.lud16 })) return null;
+    const name = typeof profile.display_name === "string" ? profile.display_name : profile.name;
+    return { address: profile.lud16.trim().toLowerCase(), ...(typeof name === "string" && name.trim() ? { name: name.trim().slice(0, 80) } : {}) };
+  } catch { return null; }
+}
+
 export function observedContact(value: ContactObservation): Contact | null {
   const pubkey = value.pubkey?.toLowerCase();
   const rawAddress = value.address?.trim();

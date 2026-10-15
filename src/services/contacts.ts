@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SimplePool } from "nostr-tools/pool";
 import { finalizeEvent, type Event } from "nostr-tools/pure";
 
-import { CONTACTS_KIND, CONTACTS_TAG, contactsFingerprint, mergeContacts, openContacts, sealContacts, type Contact } from "../lib/contacts";
+import { CONTACTS_KIND, CONTACTS_TAG, contactsFingerprint, hasContactUsername, mergeContacts, openContacts, readContactProfile, sealContacts, type Contact } from "../lib/contacts";
 import type { KeyRing } from "../lib/keys";
 import { useContacts } from "../store/contacts";
 import { swapState, useSwaps } from "../store/swaps";
@@ -11,7 +11,7 @@ import { query } from "./nostr";
 let refreshActive: (() => void) | undefined;
 export function refreshContacts(): void { refreshActive?.(); }
 
-/** Separate authenticated pool: relays see the owner and timing, never the contact graph. */
+/** The index uses a separate authenticated pool and contains only encrypted contact data. */
 export function startContacts(keys: KeyRing, relayUrls: string[], legacyAddresses: string[] = [], onLegacySaved?: () => void): () => void {
   const owner = keys.identity;
   const urls = [...new Set(relayUrls)];
@@ -22,6 +22,8 @@ export function startContacts(keys: KeyRing, relayUrls: string[], legacyAddresse
   let stopped = false;
   let initialized = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let profileTimer: ReturnType<typeof setTimeout> | undefined;
+  const checkedProfiles = new Set<string>();
   let writing = false;
   let lastCreatedAt = 0;
   let savedEvent: Event | undefined;
@@ -32,6 +34,38 @@ export function startContacts(keys: KeyRing, relayUrls: string[], legacyAddresse
   let legacyPending = legacyAddresses.length > 0;
   useContacts.setState({ owner: owner.pk, entries: {}, ready: false, syncing: true, error: null });
   const alive = () => !stopped && useContacts.getState().owner === owner.pk;
+
+  const scheduleProfiles = () => {
+    if (!alive()) return;
+    clearTimeout(profileTimer);
+    profileTimer = setTimeout(() => void resolveProfiles(), 100);
+  };
+  const resolveProfiles = async () => {
+    if (!alive()) return;
+    const authors = Object.values(useContacts.getState().entries)
+      .filter((contact) => contact.pubkey && !hasContactUsername(contact) && !checkedProfiles.has(contact.pubkey))
+      .map((contact) => contact.pubkey!).slice(0, 100);
+    if (!authors.length) return;
+    authors.forEach((pk) => checkedProfiles.add(pk));
+    try {
+      const events = await query({ kinds: [0], authors });
+      if (!alive()) return;
+      const latest = new Map<string, Event>();
+      for (const event of events) {
+        if (event.kind !== 0 || !authors.includes(event.pubkey)) continue;
+        const prior = latest.get(event.pubkey);
+        if (!prior || event.created_at > prior.created_at || (event.created_at === prior.created_at && event.id < prior.id)) latest.set(event.pubkey, event);
+      }
+      const updates: Contact[] = [];
+      for (const [pk, event] of latest) {
+        const contact = useContacts.getState().entries[pk];
+        const profile = readContactProfile(event.content);
+        if (contact && profile) updates.push({ ...contact, address: profile.address, name: contact.name ?? profile.name });
+      }
+      if (updates.length) useContacts.setState({ entries: mergeContacts(useContacts.getState().entries, updates) });
+      scheduleProfiles();
+    } catch { authors.forEach((pk) => checkedProfiles.delete(pk)); }
+  };
 
   const schedule = (delay = 1500) => {
     if (!initialized || !alive()) return;
@@ -102,12 +136,14 @@ export function startContacts(keys: KeyRing, relayUrls: string[], legacyAddresse
   };
 
   const unsubscribeStore = useContacts.subscribe((state, previous) => {
-    if (alive() && state.entries !== previous.entries) { revision++; schedule(); }
+    if (alive() && state.entries !== previous.entries) { revision++; schedule(); scheduleProfiles(); }
   });
   const unsubscribeSwaps = useSwaps.subscribe((state, previous) => { if (state.records !== previous.records) indexSwaps(); });
   const subscription = pool.subscribeMany(urls, filter, { onevent: (event) => merge(event, true) });
   const refresh = () => {
     if (!alive()) return;
+    checkedProfiles.clear();
+    scheduleProfiles();
     void pool.querySync(urls, filter, { maxWait: 5000 }).then((events) => {
       if (!alive()) return;
       for (const event of events) merge(event, true);
@@ -144,6 +180,7 @@ export function startContacts(keys: KeyRing, relayUrls: string[], legacyAddresse
     }
     stopped = true;
     clearTimeout(timer);
+    clearTimeout(profileTimer);
     unsubscribeStore(); unsubscribeSwaps(); subscription.close(); pool.destroy();
     if (refreshActive === refresh) refreshActive = undefined;
     if (useContacts.getState().owner === owner.pk) useContacts.setState({ owner: null, entries: {}, ready: false, syncing: false, error: null });
@@ -155,11 +192,8 @@ export async function contactAddress(contact: Contact): Promise<string> {
   if (contact.address) return contact.address;
   if (!contact.pubkey) throw new Error("No payment username is available for this person yet.");
   const profiles = await query({ kinds: [0], authors: [contact.pubkey], limit: 1 });
-  for (const event of profiles.sort((a, b) => b.created_at - a.created_at)) {
-    try {
-      const address: unknown = JSON.parse(event.content).lud16;
-      if (typeof address === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return address;
-    } catch { /* Invalid public profile. */ }
-  }
+  const latest = profiles.filter((e) => e.kind === 0 && e.pubkey === contact.pubkey).sort((a, b) => b.created_at - a.created_at || a.id.localeCompare(b.id))[0];
+  const profile = latest ? readContactProfile(latest.content) : null;
+  if (profile) return profile.address;
   throw new Error("This person hasn't published a payment username yet.");
 }

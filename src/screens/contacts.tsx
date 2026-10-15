@@ -1,7 +1,7 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
 import React, { useState } from "react";
 
-import type { Contact } from "../lib/contacts";
+import { hasContactUsername, type Contact } from "../lib/contacts";
 import { contactAddress, refreshContacts } from "../services/contacts";
 import { useContacts } from "../store/contacts";
 import { Button, Card, Empty, Field, IconButton, Screen, Segmented, Spinner, Text } from "../ui/components";
@@ -18,7 +18,7 @@ export function ContactsScreen() {
   const [selected, setSelected] = useState<Contact | null>(null);
   const [busy, setBusy] = useState(false);
   const needle = search.trim().toLowerCase();
-  const contacts = Object.values(entries).filter((contact) =>
+  const contacts = Object.values(entries).filter(hasContactUsername).filter((contact) =>
     (view === "all" || contact.roles.includes(view === "agents" ? "agent" : "user")) &&
     (!needle || [contact.name, contact.address, contact.pubkey].some((value) => value?.toLowerCase().includes(needle))),
   ).sort((a, b) => b.lastAt - a.lastAt || a.id.localeCompare(b.id));

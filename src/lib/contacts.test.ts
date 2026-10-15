@@ -1,5 +1,5 @@
 import { getPublicKey } from "nostr-tools/pure";
-import { contactsFingerprint, mergeContacts, observedContact, openContacts, parseContactIndex, sealContacts } from "./contacts";
+import { contactsFingerprint, hasContactUsername, mergeContacts, observedContact, openContacts, parseContactIndex, readContactProfile, sealContacts } from "./contacts";
 
 const sk = new Uint8Array(32).fill(1);
 const owner = { sk, pk: getPublicKey(sk) };
@@ -7,6 +7,15 @@ const peer = "ab".repeat(32);
 const person = observedContact({ pubkey: peer, address: "Jane@pay.example", name: "Jane", role: "user", at: 10 })!;
 
 describe("private contact index", () => {
+  it("shows payment usernames and excludes bare keys, display names and chain addresses", () => {
+    expect(hasContactUsername(person)).toBe(true);
+    for (const address of [undefined, peer, "bc1abc", "Jane", "jane@invalid", "bad name@pay.example"]) {
+      expect(hasContactUsername({ address })).toBe(false);
+    }
+    expect(readContactProfile(JSON.stringify({ name: "Jane", lud16: "jane@pay.example" }))).toEqual({ name: "Jane", address: "jane@pay.example" });
+    expect(readContactProfile(JSON.stringify({ name: "Jane" }))).toBeNull();
+    expect(readContactProfile("invalid")).toBeNull();
+  });
   it("encrypts identities, roles and names with only an app identifier in public tags", () => {
     const event = sealContacts({ [person.id]: person }, owner, 20);
     expect(event.tags).toEqual([["d", "clink.contacts.v1"]]);

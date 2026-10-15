@@ -11,11 +11,12 @@ jest.mock("./nostr", () => ({ query: jest.fn(async () => []) }));
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SimplePool } from "nostr-tools/pool";
-import { getPublicKey } from "nostr-tools/pure";
+import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
 import { observedContact, openContacts, sealContacts } from "../lib/contacts";
 import type { KeyRing } from "../lib/keys";
 import { useContacts } from "../store/contacts";
 import { startContacts } from "./contacts";
+import { query } from "./nostr";
 
 function keys(value: number): KeyRing {
   const sk = new Uint8Array(32).fill(value);
@@ -32,6 +33,7 @@ describe("contact synchronization", () => {
   beforeEach(() => {
     jest.useFakeTimers(); jest.clearAllMocks();
     jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
+    jest.mocked(query).mockResolvedValue([]);
     useContacts.setState({ owner: null, entries: {}, ready: false, syncing: false, error: null });
   });
   afterEach(() => { stop?.(); stop = undefined; jest.clearAllTimers(); jest.useRealTimers(); });
@@ -98,5 +100,28 @@ describe("contact synchronization", () => {
     const raw = jest.mocked(AsyncStorage.setItem).mock.calls.at(-1)![1];
     expect(openContacts(JSON.parse(raw), owner.identity)[peer].roles).toEqual(["agent"]);
     expect(useContacts.getState().entries).toEqual({});
+  });
+
+  it("resolves published usernames for known agents without changing the interaction time", async () => {
+    const agent = keys(3).identity;
+    jest.mocked(query).mockResolvedValue([finalizeEvent({ kind: 0, created_at: 10, tags: [], content: JSON.stringify({ name: "Jane", lud16: "jane@pay.example" }) }, agent.sk)]);
+    stop = startContacts(owner, ["wss://relay.example"]);
+    await tick();
+    useContacts.getState().record({ pubkey: agent.pk, role: "agent", at: 5 });
+    await jest.advanceTimersByTimeAsync(100);
+    expect(useContacts.getState().entries[agent.pk]).toMatchObject({ address: "jane@pay.example", name: "Jane", roles: ["agent"], lastAt: 5 });
+  });
+
+  it("does not revive an older username if the latest profile has none", async () => {
+    const agent = keys(3).identity;
+    jest.mocked(query).mockResolvedValue([
+      finalizeEvent({ kind: 0, created_at: 10, tags: [], content: JSON.stringify({ lud16: "jane@pay.example" }) }, agent.sk),
+      finalizeEvent({ kind: 0, created_at: 20, tags: [], content: JSON.stringify({ name: "Jane" }) }, agent.sk),
+    ]);
+    stop = startContacts(owner, ["wss://relay.example"]);
+    await tick();
+    useContacts.getState().record({ pubkey: agent.pk, role: "agent", at: 5 });
+    await jest.advanceTimersByTimeAsync(100);
+    expect(useContacts.getState().entries[agent.pk].address).toBeUndefined();
   });
 });

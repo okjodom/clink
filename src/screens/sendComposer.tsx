@@ -16,7 +16,7 @@ import { useWallet } from "../store/wallet";
 import { useContacts } from "../store/contacts";
 import { contactAddress } from "../services/contacts";
 import { ContactRow } from "../ui/contactRow";
-import type { Contact } from "../lib/contacts";
+import { hasContactUsername, type Contact } from "../lib/contacts";
 import { AmountDisplay, AmountPad, useAmountInput } from "../ui/amount";
 import { Avatar, Button, Card, Field, IconButton, Logo, Notice, Row, Screen, Section, Text, success } from "../ui/components";
 import { NumPad, QrShareSheet, Sheet, toastError } from "../ui/extras";
@@ -264,7 +264,7 @@ export function SendScreen() {
     } catch (cause) { if (version === generation.current) setError(errorText(cause)); }
     finally { if (version === generation.current) { operation.current = null; setBusy(false); } }
   };
-  const people = Object.values(contacts).filter((contact) => contact.roles.includes("user") || contact.address)
+  const people = Object.values(contacts).filter(hasContactUsername)
     .filter((contact) => !text.trim() || [contact.name, contact.address].some((value) => value?.toLowerCase().includes(text.trim().toLowerCase().replace(/^@/, ""))))
     .sort((a, b) => b.lastAt - a.lastAt).slice(0, 8);
   if (!parsed) return (
