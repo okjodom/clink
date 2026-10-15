@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/okjodom/clink/compare/v0.3.0...v0.3.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* reject malformed wallet credentials in release APKs ([4a29abb](https://github.com/okjodom/clink/commit/4a29abbedb51f9ed8424600225cb049cfba95a55))
+
 ## [0.3.0](https://github.com/okjodom/clink/compare/v0.2.1...v0.3.0) (2026-10-15)
 
 
