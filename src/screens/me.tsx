@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
 import React, { useState } from "react";
-import { Linking, ScrollView, Share, View } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
 
 import { BRAND } from "../brand";
 

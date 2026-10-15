@@ -3,6 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Keyboard, KeyboardAvoidingView, Modal, Pressable, StyleSheet, View } from "react-native";
 import QRCode from "react-qr-code";
+import Svg, { Rect } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 
@@ -94,27 +95,38 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
 
 /** A QR code to show or save as an image: for a shop counter, a poster or a group. */
 export function QrShareSheet({ visible, onClose, title, caption, value, fileName }: { visible: boolean; onClose: () => void; title: string; caption: string; value: string; fileName: string }) {
-  const ref = useRef<{ toDataURL: (cb: (b64: string) => void) => void } | null>(null);
-  const save = () =>
-    ref.current?.toDataURL(async (b64) => {
-      try {
-        const { Directory } = await import("expo-file-system");
-        const dir = await Directory.pickDirectoryAsync();
-        dir.createFile(`${fileName}.png`, "image/png").write(b64, { encoding: "base64" });
-        toast("QR code saved", "success");
-      } catch (e) {
-        if (!/cancel/i.test(String(e))) toastError(e);
-      }
-    });
+  const ref = useRef<Svg>(null);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (saving || !ref.current) return;
+    setSaving(true);
+    try {
+      const svg = ref.current;
+      const b64 = await new Promise<string>((resolve) => svg.toDataURL(resolve, { width: 1024, height: 1024 }));
+      const { Directory } = await import("expo-file-system");
+      const dir = await Directory.pickDirectoryAsync();
+      const name = fileName.replace(/[^a-z0-9@._-]/gi, "_").replace(/^\.+/, "") || "qr-code";
+      dir.createFile(`${name}.png`, "image/png").write(b64, { encoding: "base64" });
+      toast("QR code saved", "success");
+    } catch (e) {
+      if (!/cancel/i.test(String(e))) toastError(e);
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <Sheet visible={visible} onClose={onClose} title={title}>
       <Text variant="caption" muted>
         {caption}
       </Text>
-      <View style={styles.qr}>
-        <QRCode ref={ref as never} value={value} size={200} bgColor="#ffffff" fgColor="#14110f" />
+      <View style={[styles.qr, { padding: 0 }]}>
+        {/* Keep the white quiet zone inside the exported image, not just the surrounding View. */}
+        <Svg ref={ref} width={248} height={248} viewBox="0 0 248 248">
+          <Rect width={248} height={248} fill="#ffffff" />
+          <QRCode x={24} y={24} value={value} size={200} bgColor="#ffffff" fgColor="#14110f" />
+        </Svg>
       </View>
-      <Button title="Save QR code" icon="download" onPress={save} />
+      <Button title="Save QR code" icon="download" onPress={save} loading={saving} />
     </Sheet>
   );
 }

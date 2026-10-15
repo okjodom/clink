@@ -1,9 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, Share, View } from "react-native";
+import { ScrollView, View } from "react-native";
 
-import { BRAND } from "../brand";
 import { channelInfo, currencyInfo, CURRENCIES } from "../lib/channels";
 import { agentLink, parseAgentLink } from "../lib/links";
 import { formatDecimal } from "../lib/money";
@@ -13,7 +12,7 @@ import { useDiscovery } from "../store/discovery";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
 import { Avatar, Badge, Button, Card, Chip, Empty, Field, IconButton, Notice, Screen, Spinner, Text } from "../ui/components";
-import { QR, QrShareSheet, Sheet } from "../ui/extras";
+import { QrShareSheet, Sheet } from "../ui/extras";
 import { KeyValue } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
 
