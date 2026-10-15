@@ -102,6 +102,7 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
         ? v(`Waiting for ${them}`, `Agents usually reply within a minute. Keep ${BRAND.name} open until they do.`, "info")
         : v(`Waiting for ${them}`, `${capital(them)} hasn't replied yet. You can cancel any time before they accept.`, "info");
     case "accepted": {
+      if (now >= root.terms.deadlines.fiat_pay_by) return v("Payment window closed", "Checking the money set aside before closing this swap.", "warning");
       // Setting money aside needs one answer from the other phone first; say when that's what we wait on.
       const iSetAside = bitcoinProvider(root) === me;
       const theyAnswered = !!payloadFrom(rec, counterpartyOf(root, me), "invoice");
@@ -141,6 +142,8 @@ export function describeSwap(rec: SwapRecord, st: SwapState, me: string, now = M
     case "declined":
       return v("Declined", isAgent ? "You declined this request." : `${capital(them)} couldn't take this swap. Nothing was charged.`, "neutral");
     case "cancelled": {
+      const cancelled = [...st.chain].reverse().find((a) => a.action === "core/cancel");
+      if (cancelled && cancelled.createdAt >= root.terms.deadlines.fiat_pay_by) return v("Expired", "This swap closed because the payment window ended.", "neutral");
       const by = [...st.chain].reverse().find((a) => a.action === "core/cancel")?.signer;
       const who = by === me ? "You cancelled" : by ? `${capital(them)} cancelled` : "Cancelled";
       return v("Cancelled", `${who} this swap. ${st.chain.some((a) => a.action === "core/secure") ? "Money set aside goes back to its owner." : "Nothing was charged."}`, "neutral");

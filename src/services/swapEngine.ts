@@ -326,6 +326,33 @@ async function runDuties(id: string) {
   if (record(id).local.lastError) useSwaps.getState().patchLocal(id, { lastError: undefined });
 }
 
+/** Close overdue requests without declaring an in-flight or paid lock cancelled. */
+export async function closeOverdueSwap(id: string, ring: KeyRing = k()): Promise<boolean> {
+  const rec = record(id);
+  const st = swapState(rec);
+  const me = ring.identity.pk;
+  const t = now();
+  if (st.forked || st.disputed || ![st.root.agent, st.root.customer].includes(me)) return false;
+  if (st.status === "proposed" && t >= st.root.expiresAt) {
+    await act(id, ring.identity.sk, "core/expire");
+    return true;
+  }
+  if (st.status !== "accepted" || t < st.root.terms.deadlines.fiat_pay_by || bitcoinProvider(st.root) !== me) return false;
+
+  const announced = announcedHash(rec, st);
+  const bound = Object.entries(useSwaps.getState().paymentBindings).filter(([, binding]) => binding.coordination === id).map(([hash]) => hash);
+  if (bound.length > 1 || (announced && bound[0] && announced !== bound[0])) throw new Error("Can't verify this swap's payment hash before closing it");
+  const hash = announced ?? bound[0] ?? paymentHashOf(htlcPreimage(ring.identity.sk, id));
+  // Absence is useful evidence only after a successful sync and a complete history read.
+  const tx = await wallet.findHtlc(hash, "out", { requireSync: true, fullHistory: true });
+  if (tx && tx.htlc?.status !== "returned") return false;
+  const lockMayBeInFlight = rec.local.lockStartedAt || rec.local.lockTxId || rec.inbox.some((i) => i.from === me && i.payload?.type === "locked");
+  const newerAttempt = rec.local.lockStartedAt && tx && tx.timestamp < rec.local.lockStartedAt;
+  if (lockMayBeInFlight && (!tx || newerAttempt) && t <= htlcExpiry(st) + 600) return false;
+  await act(id, ring.identity.sk, "core/cancel");
+  return true;
+}
+
 /** Perform at most one duty. Returns true if something was done. */
 async function duty(id: string): Promise<boolean> {
   const ring = k();
@@ -335,6 +362,7 @@ async function duty(id: string): Promise<boolean> {
   const { root } = st;
   const t = now();
   if (st.forked || st.disputed) return false;
+  if (await closeOverdueSwap(id, ring)) return true;
 
   const iProvide = bitcoinProvider(root) === me;
   const direction = root.terms.direction;
@@ -506,6 +534,7 @@ function requestBody(rec: SwapRecord, quote: string, privateTerms: string): Payl
 async function sendInvoice(id: string): Promise<boolean> {
   const rec = record(id);
   const st = swapState(rec);
+  if (now() >= st.root.terms.deadlines.fiat_pay_by) return false;
   if (bitcoinProvider(st.root) === k().identity.pk || sentByMe(rec, "invoice")) return false;
   const hash = announcedHash(rec, st);
   if (!hash) return false;
