@@ -21,6 +21,7 @@ interface WalletState {
   lnurl: string | null;
   start(): Promise<void>;
   refresh(): Promise<void>;
+  sync(): Promise<void>;
   refreshRates(): Promise<void>;
   setLightningAddress(a: string | null, lnurl?: string | null): void;
   /** Keep the money in dollars or in bitcoin; converts what's there now. */
@@ -41,6 +42,7 @@ function valued(b: wallet.Balances, txs: WalletTx[], usdPerBtc: number | undefin
 
 let unsubscribe: (() => void) | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let refreshVersion = 0;
 
 // Balance, rates and address are cached so the wallet opens on numbers, not a spinner.
 export const useWallet = create<WalletState>()(
@@ -69,6 +71,7 @@ export const useWallet = create<WalletState>()(
       });
       set({ status: "ready" });
       await Promise.all([get().refresh(), get().refreshRates()]);
+      void get().sync();
       wallet
         .lightningAddressInfo()
         .then((a) => set({ lightningAddress: a?.address ?? null, lnurl: a?.lnurl ?? null }))
@@ -79,11 +82,23 @@ export const useWallet = create<WalletState>()(
   },
 
   async refresh() {
+    const version = ++refreshVersion;
     try {
       const [b, txs, holdIn] = await Promise.all([wallet.balances(), wallet.listTransactions(60), wallet.holdIn().catch(() => get().holdIn)]);
-      set({ ...valued(b, txs, get().rates.USD), holdIn });
+      if (version !== refreshVersion) return;
+      set({ ...valued(b, txs, get().rates.USD), holdIn, error: undefined });
     } catch (e) {
-      set({ error: (e as Error).message });
+      if (version === refreshVersion) set({ error: (e as Error).message });
+    }
+  },
+
+  async sync() {
+    if (get().status !== "ready") return;
+    try {
+      await wallet.syncWallet();
+      if (get().status === "ready") await get().refresh();
+    } catch {
+      // Keep the last known balance and pending activity through a network outage.
     }
   },
 
@@ -112,6 +127,9 @@ export const useWallet = create<WalletState>()(
   },
 
   reset() {
+    refreshVersion++;
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = null;
     unsubscribe?.();
     unsubscribe = null;
     set({ status: "idle", balance: null, sats: null, usd: 0, holdIn: "bitcoin", txs: [], lightningAddress: null, lnurl: null, error: undefined });

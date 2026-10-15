@@ -46,6 +46,8 @@ import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBase
 import { usernameFrom } from "../lib/username";
 import { paymentDescription, receiveDescription, refreshAddressBrand } from "../lib/paymentBrand";
 import { deliveryStatus, lowestFeeOption, onchainFeeOptions, quotedFeeSats, type OnchainFeeOption, type OnchainSpeed } from "../lib/sendFlow";
+import { transactionExplorer } from "../lib/explorers";
+import { withIncomingDeposits } from "../lib/incomingDeposits";
 
 export { usernameFrom };
 
@@ -58,6 +60,8 @@ export class WalletConfigError extends Error {}
 let sdk: BreezSdkInterface | null = null;
 let connecting: Promise<BreezSdkInterface> | null = null;
 let listenerId: string | null = null;
+let syncing: Promise<void> | null = null;
+const depositFirstSeen = new Map<string, number>();
 const listeners = new Set<(e: WalletEvent) => void>();
 
 export type WalletEvent = { type: "synced" } | { type: "payment"; payment: WalletTx };
@@ -134,7 +138,7 @@ export async function connect(): Promise<BreezSdkInterface> {
         // The wallet's own bitcoin<->dollar conversions are bookkeeping, not money in or out.
         if (tagged.inner?.payment && isOwnConversion(tagged.inner.payment)) emit({ type: "synced" });
         else if (tagged.inner?.payment) emit({ type: "payment", payment: toTx(tagged.inner.payment) });
-        else if (tagged.tag === "Synced" || tagged.tag === "ClaimedDeposits") emit({ type: "synced" });
+        else if (["Synced", "NewDeposits", "UnclaimedDeposits", "ClaimedDeposits"].includes(tagged.tag ?? "")) emit({ type: "synced" });
       },
     });
     sdk = instance;
@@ -151,6 +155,8 @@ export async function connect(): Promise<BreezSdkInterface> {
 export async function disconnect(): Promise<void> {
   const instance = sdk;
   sdk = null;
+  syncing = null;
+  depositFirstSeen.clear();
   if (!instance) return;
   try {
     if (listenerId) await instance.removeEventListener(listenerId);
@@ -261,8 +267,13 @@ export interface WalletTx {
   recipient?: string;
   invoice?: string;
   blockchainTxId?: string;
+  blockchainVout?: number;
+  detectedAt?: number;
+  pendingReason?: string;
+  explorerUrl?: string;
   network?: string;
   externalAmount?: string;
+  externalFee?: string;
   statusLabel?: string;
   htlc?: { paymentHash: string; status: "waiting" | "released" | "returned"; expiresAt: number };
 }
@@ -312,6 +323,8 @@ export function toTx(p: Payment): WalletTx {
   const conversion = d && (PaymentDetails.Spark.instanceOf(d) || PaymentDetails.Token.instanceOf(d) || PaymentDetails.Lightning.instanceOf(d)) ? d.inner.conversionInfo : undefined;
   const crossChain = conversion && (ConversionInfo.Orchestra.instanceOf(conversion) || ConversionInfo.Boltz.instanceOf(conversion)) ? conversion.inner : undefined;
   const outgoing = p.paymentType === PaymentType.Send;
+  const blockchainTxId = conversion && ConversionInfo.Orchestra.instanceOf(conversion) ? conversion.inner.externalTxHash
+    : d && (PaymentDetails.Withdraw.instanceOf(d) || PaymentDetails.Deposit.instanceOf(d)) ? d.inner.txId || undefined : undefined;
   const baseStatus = p.status === PaymentStatus.Completed ? "complete" : p.status === PaymentStatus.Failed ? "failed" : "pending";
   // Paying the source leg does not mean the bridge has delivered the money.
   const status = deliveryStatus(baseStatus, crossChain ? {
@@ -331,10 +344,12 @@ export function toTx(p: Payment): WalletTx {
     description,
     recipient: outgoing && crossChain ? crossChain.recipientAddress : lightning?.lnurlPayInfo?.lnAddress,
     invoice: lightning?.invoice,
-    blockchainTxId: conversion && ConversionInfo.Orchestra.instanceOf(conversion) ? conversion.inner.externalTxHash
-      : d && (PaymentDetails.Withdraw.instanceOf(d) || PaymentDetails.Deposit.instanceOf(d)) ? d.inner.txId || undefined : undefined,
+    blockchainTxId,
+    blockchainVout: d && PaymentDetails.Deposit.instanceOf(d) ? d.inner.vout : undefined,
+    explorerUrl: transactionExplorer(crossChain?.chain ?? "bitcoin", blockchainTxId),
     network: crossChain ? `${assetLabel(crossChain.asset)} on ${chainLabel(crossChain.chain)}` : undefined,
     externalAmount: crossChain && outgoing ? `${tokenAmount(BigInt(crossChain.deliveredAmount ?? crossChain.estimatedOut), crossChain.assetDecimals)} ${assetLabel(crossChain.asset)}` : undefined,
+    externalFee: crossChain?.feeAmount !== undefined ? `${tokenAmount(BigInt(crossChain.feeAmount), crossChain.assetDecimals)} ${assetLabel(crossChain.asset)}` : undefined,
     htlc,
     ...(token
       ? { amountSats: 0n, feeSats: 0n, usd: fromBaseUnits(BigInt(p.amount), token.decimals), feeUsd: fromBaseUnits(BigInt(p.fees), token.decimals) }
@@ -355,12 +370,32 @@ export async function listTransactions(limit = 50): Promise<WalletTx[]> {
     limit,
     sortAscending: false,
   });
-  return payments.filter((p) => !isOwnConversion(p)).map(toTx);
+  const { deposits } = await s.listUnclaimedDeposits({});
+  return withIncomingDeposits(payments.filter((p) => !isOwnConversion(p)).map(toTx), deposits, depositFirstSeen, Math.floor(Date.now() / 1000));
 }
 
 export async function getTransaction(id: string): Promise<WalletTx> {
   const s = await connect();
+  if (id.startsWith("bitcoin-deposit:")) {
+    const [, txid, vout] = id.split(":");
+    const txs = await listTransactions();
+    const current = txs.find((tx) => tx.id === id || (tx.direction === "in" && tx.blockchainTxId === txid && tx.blockchainVout === Number(vout)));
+    if (!current) throw new Error("This deposit's status changed. Check Activity for the latest transaction.");
+    return current;
+  }
   return toTx((await s.getPayment({ paymentId: id })).payment);
+}
+
+/** Coalesce foreground catch-up requests so slow network calls never overlap. */
+export async function syncWallet(): Promise<void> {
+  if (!sdk) return;
+  if (syncing) return syncing;
+  const instance = sdk;
+  syncing = (async () => {
+    try { await instance.syncWallet({}); }
+    finally { if (sdk === instance) syncing = null; }
+  })();
+  return syncing;
 }
 
 // -- receive -----------------------------------------------------------------

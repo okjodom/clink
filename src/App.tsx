@@ -52,11 +52,22 @@ function useBoot() {
     const sub = AppState.addEventListener("change", (s) => {
       if (s !== "active" || useSession.getState().phase !== "ready") return;
       void useWallet.getState().refresh();
+      void useWallet.getState().sync();
       resumeEngine();
       refreshContacts();
     });
     return () => sub.remove();
   }, []);
+
+  // Real-time SDK events update immediately; foreground polling catches missed events
+  // and blockchain deposits while the wallet or a receive request stays open.
+  useEffect(() => {
+    if (phase !== "ready") return;
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") void useWallet.getState().sync();
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [phase]);
 }
 
 installDevProbe();

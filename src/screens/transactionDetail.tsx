@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Linking, View } from "react-native";
 
 import { useMoney } from "../hooks";
 import { errorText } from "../lib/errors";
@@ -10,7 +10,7 @@ import { formatUsd } from "../lib/stablecoins";
 import { getTransaction, onWalletEvent, type WalletTx } from "../services/wallet";
 import { useWallet } from "../store/wallet";
 import { Badge, Button, Card, Collapsible, Notice, Screen, Spinner, Text } from "../ui/components";
-import { CopyField } from "../ui/extras";
+import { CopyField, toastError } from "../ui/extras";
 import { KeyValue } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
 
@@ -20,7 +20,7 @@ export function TransactionDetailScreen() {
   const { id } = useRoute<any>().params as { id: string };
   const c = useColors();
   const money = useMoney();
-  const cached = useWallet((s) => s.txs.find((tx) => tx.id === id));
+  const cached = useWallet((s) => s.txs.find((tx) => tx.id === id || (id.startsWith("bitcoin-deposit:") && tx.direction === "in" && tx.blockchainTxId === id.split(":")[1] && tx.blockchainVout === Number(id.split(":")[2]))));
   const [tx, setTx] = useState<WalletTx | undefined>(cached);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,18 +65,21 @@ export function TransactionDetailScreen() {
       <View style={{ alignSelf: "center" }}><Badge label={status} tone={failed ? "danger" : complete ? "success" : "info"} /></View>
     </View>
     {error && <Notice tone="warning" title="Showing the last available details" action={<Button small kind="secondary" title="Retry" onPress={load} />}>{error}</Notice>}
+    {tx.pendingReason && <Notice tone="info" title={status}>{tx.pendingReason}</Notice>}
     <Card>
       {tx.recipient && <KeyValue label="To" value={tx.recipient} />}
-      <KeyValue label="Date" value={date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} />
+      <KeyValue label={tx.detectedAt ? "Detected on" : "Date"} value={date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} />
       <KeyValue label="Time" value={date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })} />
       <KeyValue label="Network" value={tx.network ?? kindLabel[tx.kind]} />
       {tx.externalAmount && <KeyValue label={complete ? "Delivered" : "Estimated delivery"} value={tx.externalAmount} />}
-      {!incoming && <KeyValue label="Fee" value={tx.usd === undefined ? tx.feeSats === 0n ? "Free" : bitcoinFee : dollarFee} />}
+      {!incoming && tx.network && <KeyValue label="Bridge fee (included)" value={tx.externalFee ?? "Unavailable"} />}
+      {!incoming && (!tx.network || tx.feeSats > 0n || (tx.feeUsd ?? 0) > 0) && <KeyValue label={tx.network ? "Other fees" : "Fee"} value={tx.usd === undefined ? tx.feeSats === 0n ? "Free" : bitcoinFee : dollarFee} />}
       {!incoming && <KeyValue label="Total" value={tx.usd === undefined ? `${money.primary(tx.amountSats + tx.feeSats)} · ${formatSats(tx.amountSats + tx.feeSats)}` : formatUsd(tx.usd + (tx.feeUsd ?? 0))} />}
     </Card>
     {tx.description && <Card><Text variant="caption" muted>Description</Text><Text selectable>{tx.description}</Text></Card>}
     <CopyField value={tx.id} label="Transaction ID" short />
     {tx.blockchainTxId && <CopyField value={tx.blockchainTxId} label="Blockchain transaction ID" short />}
+    {tx.explorerUrl && <Button kind="secondary" title="View on explorer" icon="external-link" onPress={() => void Linking.openURL(tx.explorerUrl!).catch(toastError)} />}
     {tx.invoice && <Collapsible title="Payment request"><CopyField value={tx.invoice} label="Invoice" short /></Collapsible>}
   </Screen>;
 }

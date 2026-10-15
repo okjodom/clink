@@ -108,7 +108,7 @@ export function TxRow({ tx, hidden }: { tx: WalletTx; hidden?: boolean }) {
           : tx.htlc?.status === "waiting"
             ? "Set aside for cash out"
             : "Cashed out"
-      : incoming ? "Received" : tx.recipient ? `Paid ${tx.recipient.split("@")[0]}` : "Sent");
+      : incoming ? "Received" : tx.recipient?.includes("@") ? `Paid ${tx.recipient.split("@")[0]}` : "Sent");
   const swapPayment = !!swap || tx.kind === "htlc";
   const adding = swap?.adding ?? incoming;
   const icon: React.ComponentProps<typeof Feather>["name"] = swapPayment
