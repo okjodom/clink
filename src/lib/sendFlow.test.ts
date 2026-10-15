@@ -1,4 +1,4 @@
-import { deliveryStatus, oncePayment, quotedFeeSats, quoteProblem, shortRecipient } from "./sendFlow";
+import { deliveryStatus, lowestFeeOption, onchainFeeOptions, oncePayment, quotedFeeSats, quoteProblem, shortRecipient } from "./sendFlow";
 
 describe("send confirmation", () => {
   it("waits for bridge delivery after the funding payment completes", () => {
@@ -10,10 +10,35 @@ describe("send confirmation", () => {
     expect(deliveryStatus("complete")).toBe("complete");
   });
   it("includes the broadcast fee in the Bitcoin quote and balance check", () => {
-    const fee = quotedFeeSats({ inner: { feeQuote: { speedMedium: { userFeeSat: 100n, l1BroadcastFeeSat: 300n } } } });
+    const fee = quotedFeeSats({ inner: { feeQuote: {
+      speedSlow: { userFeeSat: 50n, l1BroadcastFeeSat: 150n },
+      speedMedium: { userFeeSat: 100n, l1BroadcastFeeSat: 300n },
+      speedFast: { userFeeSat: 200n, l1BroadcastFeeSat: 500n },
+    } } }, "medium");
     expect(fee).toBe(400n);
     expect(quoteProblem(600n, fee, 999n)).toMatch(/Not enough/);
     expect(quoteProblem(600n, fee, 1000n)).toBeNull();
+  });
+  it("defaults to the lowest complete fee and updates fees and balance checks for every speed", () => {
+    const method = { inner: { feeQuote: {
+      speedSlow: { userFeeSat: 100n, l1BroadcastFeeSat: 200n },
+      speedMedium: { userFeeSat: 150n, l1BroadcastFeeSat: 300n },
+      speedFast: { userFeeSat: 200n, l1BroadcastFeeSat: 500n },
+    } } };
+    expect(quotedFeeSats(method)).toBe(300n);
+    expect(lowestFeeOption(onchainFeeOptions(method)).speed).toBe("slow");
+    expect(quotedFeeSats(method, "medium")).toBe(450n);
+    expect(quotedFeeSats(method, "fast")).toBe(700n);
+    expect(quoteProblem(1000n, quotedFeeSats(method), 1400n)).toBeNull();
+    expect(quoteProblem(1000n, quotedFeeSats(method, "fast"), 1400n)).toMatch(/Not enough/);
+    method.inner.feeQuote.speedMedium = { userFeeSat: 0n, l1BroadcastFeeSat: 100n };
+    expect(quotedFeeSats(method)).toBe(100n);
+    expect(lowestFeeOption(onchainFeeOptions(method)).speed).toBe("medium");
+  });
+  it("prefers Economy on equal fees and rejects incomplete Bitcoin quotes", () => {
+    const fee = { userFeeSat: 0n, l1BroadcastFeeSat: 100n };
+    expect(lowestFeeOption(onchainFeeOptions({ inner: { feeQuote: { speedSlow: fee, speedMedium: fee, speedFast: fee } } })).speed).toBe("slow");
+    expect(() => quotedFeeSats({ inner: { feeQuote: { speedSlow: { userFeeSat: 100n } } } })).toThrow(/fee/);
   });
   it("keeps Lightning and Spark fees, including free transfers, and rejects missing fees", () => {
     expect(quotedFeeSats({ inner: { sparkTransferFeeSats: 2n, lightningFeeSats: 10n } })).toBe(2n);

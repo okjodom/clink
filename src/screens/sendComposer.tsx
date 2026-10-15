@@ -7,7 +7,7 @@ import { BackHandler, Keyboard, Platform, ScrollView, View } from "react-native"
 import { useMoney } from "../hooks";
 import { errorText } from "../lib/errors";
 import { parseAgentLink } from "../lib/links";
-import { oncePayment, quoteProblem, shortRecipient } from "../lib/sendFlow";
+import { lowestFeeOption, oncePayment, quoteProblem, shortRecipient } from "../lib/sendFlow";
 import { formatSats } from "../lib/money";
 import { formatUsd, looksLikeStablecoinAddress, tokenAmount } from "../lib/stablecoins";
 import { expandUsername } from "../lib/username";
@@ -338,6 +338,19 @@ export function SendScreen() {
               <KeyValue label="Total" value={money.primary(prepared.amountSats + prepared.feeSats)} />
             </>}
           </View>
+          {prepared?.onchain && <View style={{ gap: space.sm }}>
+            <Text variant="label">Speed</Text>
+            {prepared.onchain.options.map((option) => <Row key={option.speed}
+              icon={option.speed === prepared.onchain!.speed ? "check-circle" : "circle"}
+              title={{ slow: "Economy", medium: "Standard", fast: "Fast" }[option.speed]}
+              subtitle={`${money.primary(option.feeSats)} · ${formatSats(option.feeSats)}${option.speed === lowestFeeOption(prepared.onchain!.options).speed ? " · Lowest fee" : ""}`}
+              onPress={busy ? undefined : () => {
+                const next = prepared.onchain!.selectSpeed(option.speed);
+                setPrepared({ ...next, send: oncePayment(next.send) });
+                setError(null);
+              }} />)}
+            <Text variant="caption" muted>Economy may take longer to confirm. Fees include provider and Bitcoin network charges.</Text>
+          </View>}
           {stableQuote && <Notice tone="warning">{`Confirm the recipient uses ${stableRoute?.label}. This network must match.`}</Notice>}
           {(totalProblem || error) && <Notice tone="danger">{totalProblem ?? error}</Notice>}
         </ScrollView>

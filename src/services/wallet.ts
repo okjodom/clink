@@ -45,7 +45,7 @@ import { BRAND } from "../brand";
 import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBaseUnits, quoteExpiry, tokenAmount, toBaseUnits } from "../lib/stablecoins";
 import { usernameFrom } from "../lib/username";
 import { paymentDescription, receiveDescription, refreshAddressBrand } from "../lib/paymentBrand";
-import { deliveryStatus, quotedFeeSats } from "../lib/sendFlow";
+import { deliveryStatus, lowestFeeOption, onchainFeeOptions, quotedFeeSats, type OnchainFeeOption, type OnchainSpeed } from "../lib/sendFlow";
 
 export { usernameFrom };
 
@@ -526,6 +526,7 @@ function fromInput(input: InputType, raw: string, amountHint?: bigint): ParsedIn
 export interface PreparedSend {
   amountSats: bigint;
   feeSats: bigint;
+  onchain?: { speed: OnchainSpeed; options: OnchainFeeOption[]; selectSpeed: (speed: OnchainSpeed) => PreparedSend };
   send: () => Promise<WalletTx>;
 }
 
@@ -561,19 +562,21 @@ export async function prepareSend(input: ParsedInput, amountSats?: bigint, comme
     conversionOptions: undefined,
     feePolicy: undefined,
   });
-  const fee = quotedFeeSats(prepared.paymentMethod);
-  return {
+  const speeds = input.type === "onchain" ? onchainFeeOptions(prepared.paymentMethod) : [];
+  const makeQuote = (speed?: OnchainSpeed): PreparedSend => ({
     amountSats: BigInt(prepared.amount),
-    feeSats: fee,
+    feeSats: quotedFeeSats(prepared.paymentMethod, speed),
+    onchain: speed ? { speed, options: speeds, selectSpeed: makeQuote } : undefined,
     send: async () => {
       const options =
         input.type === "onchain"
-          ? new SendPaymentOptions.BitcoinAddress({ confirmationSpeed: OnchainConfirmationSpeed.Medium })
+          ? new SendPaymentOptions.BitcoinAddress({ confirmationSpeed: speed === "fast" ? OnchainConfirmationSpeed.Fast : speed === "medium" ? OnchainConfirmationSpeed.Medium : OnchainConfirmationSpeed.Slow })
           : undefined;
       const res = await s.sendPayment({ prepareResponse: prepared, options, idempotencyKey: undefined });
       return toTx(res.payment);
     },
-  };
+  });
+  return makeQuote(speeds.length ? lowestFeeOption(speeds).speed : undefined);
 }
 
 // -- USDT / USDC on other chains ---------------------------------------------
