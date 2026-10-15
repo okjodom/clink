@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { RootNavigator } from "./navigation";
+import { BREEZ_NETWORK } from "./services/config";
 import { resumeAgent, suspendAgent } from "./services/agentLoop";
 import { installDevProbe } from "./services/devProbe";
 import { resumeEngine, startEngine, stopEngine } from "./services/swapEngine";
@@ -32,7 +33,7 @@ function useBoot() {
   // Wallet, swap engine and agent loop run whenever a wallet is present.
   useEffect(() => {
     if (phase !== "ready" || !keys) return;
-    void useWallet.getState().start();
+    void useWallet.getState().start(`${BREEZ_NETWORK}.${keys.identity.pk}`);
     startEngine(keys);
     resumeAgent();
     return () => {

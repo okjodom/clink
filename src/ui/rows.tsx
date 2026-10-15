@@ -30,7 +30,7 @@ export function SwapRow({ item }: { item: SwapItem }) {
           </View>
           {view.myTurn && (
             <View style={{ position: "absolute", right: -6, top: -6 }}>
-              <Pulse color={c.accent} size={8} />
+              <Pulse color={t.fg} size={8} />
             </View>
           )}
         </View>
@@ -44,7 +44,7 @@ export function SwapRow({ item }: { item: SwapItem }) {
           </Text>
         </View>
       }
-      right={unread ? <Badge label={String(unread)} tone="accent" icon="message-circle" /> : undefined}
+      right={unread ? <Badge label={String(unread)} tone={adding ? "warning" : "success"} icon="message-circle" /> : undefined}
       chevron
     />
   );
