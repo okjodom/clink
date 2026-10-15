@@ -9,10 +9,10 @@
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes, utf8ToBytes } from "@noble/hashes/utils.js";
-import { generateMnemonic, validateMnemonic } from "@scure/bip39";
+import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
+import { HDKey } from "@scure/bip32";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { getPublicKey } from "nostr-tools/pure";
-import { privateKeyFromSeedWords } from "nostr-tools/nip06";
 
 export interface KeyPair {
   sk: Uint8Array;
@@ -52,18 +52,28 @@ export function mnemonicWordSuggestions(prefix: string, limit = 4): string[] {
   return wordlist.filter((w) => w.startsWith(p)).slice(0, limit);
 }
 
-function account(mnemonic: string, index: number): KeyPair {
-  const sk = privateKeyFromSeedWords(mnemonic, undefined, index);
+function account(root: HDKey, index: number): KeyPair {
+  const sk = root.derive(`m/44'/1237'/${index}'/0/0`).privateKey;
+  if (!sk) throw new Error("Could not derive identity key");
   return { sk, pk: getPublicKey(sk) };
 }
 
 export function deriveKeyRing(mnemonic: string): KeyRing {
   const m = normaliseMnemonic(mnemonic);
-  return {
-    identity: account(m, ACCOUNT.identity),
-    escrow: account(m, ACCOUNT.escrow),
-    resolver: account(m, ACCOUNT.resolver),
-  };
+  // NIP-06 accounts share one BIP39 seed. PBKDF2 is deliberately expensive;
+  // repeating it for each authority delays the first wallet frame on Hermes.
+  const seed = mnemonicToSeedSync(m);
+  const root = HDKey.fromMasterSeed(seed);
+  try {
+    return {
+      identity: account(root, ACCOUNT.identity),
+      escrow: account(root, ACCOUNT.escrow),
+      resolver: account(root, ACCOUNT.resolver),
+    };
+  } finally {
+    seed.fill(0);
+    root.wipePrivateData();
+  }
 }
 
 // -- HTLC secrets ------------------------------------------------------------
