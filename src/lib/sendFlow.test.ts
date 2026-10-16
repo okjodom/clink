@@ -1,6 +1,13 @@
-import { deliveryStatus, lowestFeeOption, onchainFeeOptions, oncePayment, quotedFeeSats, quoteProblem, shortRecipient } from "./sendFlow";
+import { deliveryStatus, lowestFeeOption, onchainFeeOptions, oncePayment, quotedFeeSats, quoteProblem, sendAmount, shortRecipient } from "./sendFlow";
 
 describe("send confirmation", () => {
+  it("uses the entered amount for open destinations and keeps fixed requests fixed", () => {
+    expect(sendAmount({}, 150n)).toBe(150n);
+    expect(sendAmount({ amountSats: 100n })).toBe(100n);
+    expect(sendAmount({ amountSats: 100n }, 100n)).toBe(100n);
+    expect(() => sendAmount({ amountSats: 100n }, 150n)).toThrow(/fixed amount/);
+    for (const amount of [undefined, 0n, -1n]) expect(() => sendAmount({}, amount)).toThrow(/greater than zero/);
+  });
   it("waits for bridge delivery after the funding payment completes", () => {
     expect(deliveryStatus("complete", { complete: false, failed: false })).toBe("pending");
     expect(deliveryStatus("complete", { complete: true, failed: false })).toBe("complete");

@@ -138,7 +138,6 @@ export function SendScreen() {
         if (next.details.amount !== undefined && options.length === 1) setUsd(tokenAmount(BigInt(next.details.amount), options[0].decimals));
       }
       if (next.type !== "lnurl" && next.type !== "stablecoin" && next.amountSats) input.setSats(Number(next.amountSats));
-      if (next.type === "bolt11" && !next.amountSats) throw new Error("Ask for a payment request with an amount.");
       setParsed(next);
     } catch (cause) {
       if (version !== generation.current) return;
@@ -158,8 +157,9 @@ export function SendScreen() {
   const stable = parsed?.type === "stablecoin";
   const fixedAmount = parsed && parsed.type !== "lnurl" && parsed.type !== "stablecoin" ? parsed.amountSats : undefined;
   const sats = fixedAmount ? Number(fixedAmount) : input.sats;
+  const invoice = parsed?.type === "bolt11" || parsed?.type === "sparkInvoice";
   const recipient = parsed?.type === "lnurl" ? parsed.address ?? "Payment request"
-    : parsed?.type === "bolt11" ? "Payment request" : parsed?.address ?? text;
+    : invoice ? "Payment request" : parsed?.address ?? text;
   const tooMuch = !stable && balance !== null && sats > balance;
   const outsideLnurl = parsed?.type === "lnurl" && sats > 0 && (BigInt(sats) < parsed.minSats || BigInt(sats) > parsed.maxSats);
   const outsideStable = stableRoute && Number(usd) > 0 && ((stableRoute.minUsd !== undefined && Number(usd) < stableRoute.minUsd) || (stableRoute.maxUsd !== undefined && Number(usd) > stableRoute.maxUsd));
@@ -206,7 +206,7 @@ export function SendScreen() {
       setPrepared(null);
       setStableQuote(null);
       if (current.status !== "failed") {
-        const address = parsed.type === "lnurl" ? parsed.address : parsed.type === "bolt11" ? undefined : parsed.address;
+        const address = parsed.type === "lnurl" ? parsed.address : parsed.type === "bolt11" || parsed.type === "sparkInvoice" ? undefined : parsed.address;
         const known = contactId ? contacts[contactId] : undefined;
         if (address && address !== ownAddress) useContacts.getState().record({ pubkey: known?.pubkey, address, name: known?.name, role: "user", at: current.timestamp });
       }
@@ -273,10 +273,10 @@ export function SendScreen() {
       footer={<Button title="Continue" loading={busy} disabled={!text.trim()} onPress={() => parse(text)} />}>
       <View style={{ gap: space.sm, paddingTop: space.lg }}>
         <Text variant="title">Who are you paying?</Text>
-        <Text muted>A username is all you need.</Text>
+        <Text muted>Enter a username, address or payment request.</Text>
       </View>
       <Field value={text} onChangeText={(value) => { setText(value); setError(null); }} editable={!busy}
-        placeholder="Username or address" accessibilityLabel="Recipient username or address" autoCapitalize="none" autoCorrect={false}
+        placeholder="Username, address or invoice" accessibilityLabel="Recipient username, address or invoice" autoCapitalize="none" autoCorrect={false}
         returnKeyType="next" onSubmitEditing={() => void parse(text)} error={error} />
       <View style={{ flexDirection: "row", gap: space.sm }}>
         <Button small style={{ flex: 1 }} kind="secondary" title="Paste" icon="clipboard" disabled={busy} onPress={paste} />
@@ -306,7 +306,7 @@ export function SendScreen() {
         </View> : fixedAmount ? <View style={{ alignItems: "center", gap: space.sm }}>
           <Text variant="hero" adjustsFontSizeToFit numberOfLines={1}>{money.primary(fixedAmount)}</Text>
           <Text muted>{money.secondary(fixedAmount)}</Text>
-          {parsed.type === "bolt11" && parsed.description && <Text variant="caption" muted center>{parsed.description}</Text>}
+          {invoice && parsed.description && <Text variant="caption" muted center>{parsed.description}</Text>}
         </View> : <AmountDisplay input={input} />}
         <Text variant="caption" muted center>{balance === null ? "Loading your available balance…" : `Available: ${money.primary(balance)}`}</Text>
         {(amountProblem || error) && <Text variant="caption" color={c.danger} center style={{ marginTop: space.sm }}>{amountProblem ?? error}</Text>}

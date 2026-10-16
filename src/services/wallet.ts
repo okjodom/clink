@@ -46,7 +46,7 @@ import { BRAND } from "../brand";
 import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBaseUnits, quoteExpiry, tokenAmount, toBaseUnits } from "../lib/stablecoins";
 import { usernameFrom } from "../lib/username";
 import { paymentDescription, receiveDescription, refreshAddressBrand } from "../lib/paymentBrand";
-import { deliveryStatus, lowestFeeOption, onchainFeeOptions, quotedFeeSats, type OnchainFeeOption, type OnchainSpeed } from "../lib/sendFlow";
+import { deliveryStatus, lowestFeeOption, onchainFeeOptions, quotedFeeSats, sendAmount, type OnchainFeeOption, type OnchainSpeed } from "../lib/sendFlow";
 import { transactionExplorer } from "../lib/explorers";
 import { withIncomingDeposits } from "../lib/incomingDeposits";
 
@@ -492,6 +492,7 @@ export async function claimFirstFree(base: string): Promise<AddressInfo> {
 
 export type ParsedInput =
   | { type: "bolt11"; raw: string; amountSats?: bigint; description?: string }
+  | { type: "sparkInvoice"; raw: string; amountSats?: bigint; description?: string }
   | { type: "lnurl"; raw: string; address?: string; payRequest: LnurlPayRequestDetails; minSats: bigint; maxSats: bigint }
   | { type: "onchain"; raw: string; address: string; amountSats?: bigint }
   | { type: "spark"; raw: string; address: string; amountSats?: bigint }
@@ -511,7 +512,7 @@ function fromInput(input: InputType, raw: string, amountHint?: bigint): ParsedIn
     return {
       type: "bolt11",
       raw: d.invoice.bolt11,
-      amountSats: d.amountMsat !== undefined ? BigInt(d.amountMsat) / 1000n : undefined,
+      amountSats: d.amountMsat !== undefined ? BigInt(d.amountMsat) / 1000n : amountHint,
       description: paymentDescription(d.description ?? undefined),
     };
   }
@@ -543,6 +544,11 @@ function fromInput(input: InputType, raw: string, amountHint?: bigint): ParsedIn
   if (InputType.SparkAddress.instanceOf(input)) {
     return { type: "spark", raw, address: input.inner[0].address, amountSats: amountHint };
   }
+  if (InputType.SparkInvoice.instanceOf(input)) {
+    const d = input.inner[0];
+    if (d.tokenIdentifier) throw new Error("This invoice requests a token payment. Use a USDT or USDC address instead.");
+    return { type: "sparkInvoice", raw: d.invoice, amountSats: d.amount ?? amountHint, description: paymentDescription(d.description) };
+  }
   if (InputType.CrossChainAddress.instanceOf(input)) {
     return { type: "stablecoin", raw, address: input.inner[0].address, details: input.inner[0] };
   }
@@ -550,7 +556,7 @@ function fromInput(input: InputType, raw: string, amountHint?: bigint): ParsedIn
     const d = input.inner[0];
     const amount = d.amountSat !== undefined ? BigInt(d.amountSat) : undefined;
     // Prefer Lightning, then Spark, then on-chain from a unified QR.
-    const order = [InputType.Bolt11Invoice, InputType.SparkAddress, InputType.BitcoinAddress] as const;
+    const order = [InputType.Bolt11Invoice, InputType.SparkInvoice, InputType.SparkAddress, InputType.BitcoinAddress] as const;
     for (const t of order) {
       const m = d.paymentMethods.find((pm) => t.instanceOf(pm));
       if (m) return fromInput(m, raw, amount);
@@ -570,7 +576,8 @@ export async function prepareSend(input: ParsedInput, amountSats?: bigint, comme
   const s = await connect();
   if (input.type === "stablecoin") throw new Error("Use prepareStablecoinSend for USDT/USDC");
   if (input.type === "lnurl") {
-    if (!amountSats) throw new Error("Enter an amount");
+    if (!amountSats || amountSats <= 0n) throw new Error("Enter an amount greater than zero.");
+    if (amountSats < input.minSats || amountSats > input.maxSats) throw new Error("Choose an amount within this recipient's limits.");
     const prepared = await s.prepareLnurlPay({
       amount: amountSats,
       payRequest: input.payRequest,
@@ -589,11 +596,11 @@ export async function prepareSend(input: ParsedInput, amountSats?: bigint, comme
       },
     };
   }
-  const amount = input.type === "bolt11" ? undefined : (amountSats ?? input.amountSats);
-  if (input.type !== "bolt11" && !amount) throw new Error("Enter an amount");
+  const requestedAmount = sendAmount(input, amountSats);
+  const invoice = input.type === "bolt11" || input.type === "sparkInvoice";
   const prepared = await s.prepareSendPayment({
-    paymentRequest: new PaymentRequest.Input({ input: input.type === "bolt11" ? input.raw : input.address }),
-    amount,
+    paymentRequest: new PaymentRequest.Input({ input: invoice ? input.raw : input.address }),
+    amount: requestedAmount,
     tokenIdentifier: undefined,
     conversionOptions: undefined,
     feePolicy: undefined,
