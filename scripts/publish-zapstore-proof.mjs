@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+class ProofRejection extends Error {}
+
 // zsp signs the proof offline; its online identity command requires an
 // interactive menu. Wait for the relay's explicit acceptance in CI instead.
 export function publishProof(event, Socket = WebSocket, timeoutMs = 30_000) {
@@ -27,12 +29,21 @@ export function publishProof(event, Socket = WebSocket, timeoutMs = 30_000) {
       let response;
       try { response = JSON.parse(String(data)); } catch { return; }
       if (!Array.isArray(response) || response[0] !== "OK" || response[1] !== event.id) return;
-      finish(response[2] === true ? undefined : new Error(`Zapstore rejected the proof: ${response[3] ?? "unknown reason"}`));
+      finish(response[2] === true ? undefined : new ProofRejection(`Zapstore rejected the proof: ${response[3] ?? "unknown reason"}`));
     });
   });
 }
 
+export async function publishProofWithRetry(event, { Socket = WebSocket, timeoutMs = 30_000, attempts = 3, delayMs = 2000 } = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try { return await publishProof(event, Socket, timeoutMs); } catch (error) {
+      if (error instanceof ProofRejection || error instanceof assert.AssertionError || attempt === attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  await publishProof(JSON.parse(readFileSync(process.argv[2], "utf8")));
+  await publishProofWithRetry(JSON.parse(readFileSync(process.argv[2], "utf8")));
   console.log("Zapstore accepted the Android signing certificate proof.");
 }

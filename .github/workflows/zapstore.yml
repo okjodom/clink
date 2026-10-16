@@ -62,10 +62,7 @@ jobs:
           sha256sum --check "clink-$TAG.apk.sha256"
 
       - name: Install pinned Zapstore CLI
-        run: |
-          curl --fail --location --retry 3 https://github.com/zapstore/zsp/releases/download/v0.4.17/zsp-0.4.17-linux-amd64 --output "$RUNNER_TEMP/zsp"
-          echo "3f241da6a5dc7a85fe851d3b42b77790b651bd36c7029382a701262bda832d20  $RUNNER_TEMP/zsp" | sha256sum --check
-          chmod +x "$RUNNER_TEMP/zsp"
+        uses: ./.github/actions/setup-zsp
 
       - name: Verify production APK metadata and signature
         env:
@@ -81,6 +78,7 @@ jobs:
           KEYSTORE: ${{ secrets.CLINK_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.CLINK_STORE_PASSWORD }}
         run: |
+          umask 077
           echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/zapstore.keystore"
           expected=$(keytool -exportcert -keystore "$RUNNER_TEMP/zapstore.keystore" -storepass:env KEYSTORE_PASSWORD -alias clink | sha256sum | cut -d' ' -f1)
           actual=$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).cert_fingerprint' "$RUNNER_TEMP/apk.json")
@@ -89,9 +87,18 @@ jobs:
             exit 1
           fi
 
+      # Fail before any publication if the keystore or signer cannot produce
+      # the ownership proof. Publication itself follows app whitelisting.
+      - name: Generate the Android certificate proof
+        env:
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+          KEYSTORE_PASSWORD: ${{ secrets.CLINK_STORE_PASSWORD }}
+        run: node scripts/sign-zapstore-proof.mjs "$RUNNER_TEMP/zsp" "$RUNNER_TEMP/zapstore.keystore" "$RUNNER_TEMP/publisher-proof.json"
+
       # Use GitHub as the source, with exact anchored release/asset filters.
       # This preserves the original download URL, date and release notes.
       - name: Publish signed release to Zapstore
+        id: app
         env:
           SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -101,12 +108,24 @@ jobs:
           --commit "$RELEASE_COMMIT"
 
       - name: Link the Android signing certificate to the publisher
+        id: proof
+        run: node scripts/publish-zapstore-proof.mjs "$RUNNER_TEMP/publisher-proof.json"
+
+      - name: Summarize publication stages
+        if: always()
         env:
-          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
-          KEYSTORE_PASSWORD: ${{ secrets.CLINK_STORE_PASSWORD }}
+          TAG: ${{ inputs.tag }}
+          APP_STATUS: ${{ steps.app.outcome }}
+          PROOF_STATUS: ${{ steps.proof.outcome }}
         run: |
-          "$RUNNER_TEMP/zsp" identity --link-key "$RUNNER_TEMP/zapstore.keystore" --key-alias clink --offline > "$RUNNER_TEMP/publisher-proof.json"
-          node scripts/publish-zapstore-proof.mjs "$RUNNER_TEMP/publisher-proof.json"
+          {
+            echo "### Zapstore: $TAG"
+            echo "- App and release publication: ${APP_STATUS:-not started}"
+            echo "- Android certificate proof: ${PROOF_STATUS:-not started}"
+            if [ "$APP_STATUS" = success ] && [ "$PROOF_STATUS" != success ]; then
+              echo "The app publication succeeded, but certificate linking is incomplete. Retry the Zapstore workflow for this tag; no new APK or release is needed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove the signing keystore
         if: always()

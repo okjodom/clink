@@ -1,0 +1,10 @@
+name: Install Zapstore CLI
+description: Install the version and binary digest used for publishing and integration tests
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        curl --fail --location --retry 3 https://github.com/zapstore/zsp/releases/download/v0.4.17/zsp-0.4.17-linux-amd64 --output "$RUNNER_TEMP/zsp"
+        echo "3f241da6a5dc7a85fe851d3b42b77790b651bd36c7029382a701262bda832d20  $RUNNER_TEMP/zsp" | sha256sum --check
+        chmod +x "$RUNNER_TEMP/zsp"

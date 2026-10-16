@@ -13,8 +13,16 @@ and prereleases are rejected. The GitHub APK download URL and release notes
 are preserved. The CLI binary itself is pinned by version and SHA-256.
 
 Publishing also renews the NIP-C1 proof linking the Android signing certificate
-to the dedicated Nostr publisher. A failed publication or certificate-linking
-step fails the workflow; it does not rebuild or remove the GitHub release.
+to the dedicated Nostr publisher. Proof generation happens before app publication
+so a bad signing setup fails early. The helper detects JKS versus PKCS#12 from
+the file contents and gives the pinned CLI the matching extension; Android's
+`.keystore` filename alone does not identify the format.
+
+The signed proof is sent after app publication, allowing first-time publisher
+whitelisting to finish first. Network failures retry up to three times; explicit
+relay rejection fails immediately. The job summary reports app publication and
+certificate linking separately. A failed step does not rebuild or remove the
+GitHub release.
 
 ## Publisher identity
 
@@ -44,7 +52,7 @@ stored signing key later while preserving the same identity.
 ## Retry a release
 
 After this workflow is merged, use **Actions → Zapstore → Run workflow** and
-enter the existing stable release tag, such as `v0.3.0`. This retries
+enter the existing stable release tag, such as `v0.3.1`. This retries
 distribution without rebuilding Android or creating another release. Keep the
 default branch selected so the current publishing workflow and metadata run.
 The main workflow serializes releases and Zapstore publishing is also serialized.
@@ -56,11 +64,20 @@ only in GitHub Secrets; do not commit private keys to the listing configuration.
 
 Run `node --test scripts/prepare-zapstore.test.mjs scripts/publish-zapstore-proof.test.mjs`
 for release-selection, production APK and relay acknowledgement guards.
-CI runs these checks alongside the app's normal checks.
+CI runs these checks alongside the app's normal checks. It also downloads the
+same pinned CLI used in production and runs
+`ZSP_BIN=/path/to/zsp node --test scripts/sign-zapstore-proof.test.mjs` against
+temporary JKS and PKCS#12 keystores. These tests use throwaway keys and do not
+publish to relays.
 
-No GitHub release existed when this automation was added. The first full online
-publication is therefore verified after merge and creation of the first signed
-release, rather than by publishing a development APK.
+## v0.3.1 publishing incident
+
+The first run successfully published the application, release and APK events,
+but failed certificate linking with `load JKS: got invalid magic`. The actual
+keystore was PKCS#12; its `.keystore` filename made zsp v0.4.17 select its JKS
+loader. A public relay query confirmed that the v0.3.1 listing was present and
+the ownership proof was missing. Retry v0.3.1 after merging the format fix;
+there is no need to rebuild the APK or create another release.
 
 References: [Zapstore publishing guide](https://zapstore.dev/docs/publish),
 [pinned CLI source](https://github.com/zapstore/zsp/tree/v0.4.17),

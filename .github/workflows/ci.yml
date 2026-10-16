@@ -36,6 +36,12 @@ jobs:
         run: node --test scripts/prepare-zapstore.test.mjs scripts/publish-zapstore-proof.test.mjs
       - name: Check Breez release credential validation
         run: node --test scripts/check-breez-api-key.test.mjs
+      - name: Install the publishing CLI for integration checks
+        uses: ./.github/actions/setup-zsp
+      - name: Test Android certificate proof signing with the pinned CLI
+        env:
+          ZSP_BIN: ${{ runner.temp }}/zsp
+        run: node --test scripts/sign-zapstore-proof.test.mjs
 
   # Release pull requests build the exact APK the release will ship, signed
   # with the upload key, so a broken build is caught before the tag exists.
