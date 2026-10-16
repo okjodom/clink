@@ -13,6 +13,7 @@ import { Badge, Button, Card, Collapsible, Notice, Screen, Spinner, Text } from 
 import { CopyField, toastError } from "../ui/extras";
 import { KeyValue } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
+import { DepositClaimAction } from "../ui/depositClaim";
 
 const kindLabel: Record<WalletTx["kind"], string> = { lightning: "Lightning", spark: "Spark", onchain: "Bitcoin on-chain", htlc: "Swap payment", other: "Wallet payment" };
 
@@ -62,10 +63,11 @@ export function TransactionDetailScreen() {
       <Text variant="heading">{incoming ? "Received" : "Sent"}</Text>
       <Text variant="display" adjustsFontSizeToFit numberOfLines={1}>{amount}</Text>
       {tx.usd === undefined && <Text muted>{formatSats(tx.amountSats)}</Text>}
-      <View style={{ alignSelf: "center" }}><Badge label={status} tone={failed ? "danger" : complete ? "success" : "info"} /></View>
+      <View style={{ alignSelf: "center" }}><Badge label={status} tone={failed ? "danger" : complete ? "success" : tx.depositClaim === "fee-required" ? "warning" : "info"} /></View>
     </View>
     {error && <Notice tone="warning" title="Showing the last available details" action={<Button small kind="secondary" title="Retry" onPress={load} />}>{error}</Notice>}
     {tx.pendingReason && <Notice tone="info" title={status}>{tx.pendingReason}</Notice>}
+    {tx.status === "pending" && tx.depositClaim === "fee-required" && <DepositClaimAction key={id} id={id} onChange={load} />}
     <Card>
       {tx.recipient && <KeyValue label="To" value={tx.recipient} />}
       <KeyValue label={tx.detectedAt ? "Detected on" : "Date"} value={date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} />

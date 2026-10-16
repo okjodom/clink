@@ -16,6 +16,7 @@ import {
   defaultConfig,
   InputType,
   Network,
+  MaxFee,
   OnchainConfirmationSpeed,
   PaymentDetails,
   PaymentMethod,
@@ -121,6 +122,9 @@ export async function connect(): Promise<BreezSdkInterface> {
       apiKey: BREEZ_API_KEY,
       // Spark-to-Spark keeps swaps and in-app transfers instant and cheap.
       preferSparkOverLightning: true,
+      // Keep automatic deposit claims cheap. Higher fees require approval for
+      // that individual deposit, rather than changing this wallet-wide limit.
+      maxDepositClaimFee: new MaxFee.Rate({ satPerVbyte: 1n }),
       // "Hold in dollars": Breez converts incoming bitcoin to USDB and back
       // again when a payment needs bitcoin. Off until the person turns it on.
       stableBalanceConfig: MAINNET
@@ -272,6 +276,7 @@ export interface WalletTx {
   blockchainVout?: number;
   detectedAt?: number;
   pendingReason?: string;
+  depositClaim?: "fee-required" | "approved" | "submitted";
   explorerUrl?: string;
   network?: string;
   externalAmount?: string;

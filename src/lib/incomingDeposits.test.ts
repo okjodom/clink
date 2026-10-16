@@ -37,7 +37,17 @@ it("does not resurrect already-claimed or instant-claimed outputs", () => {
 
 it("keeps blocked claims and refunds visible without treating them as spendable", () => {
   expect(withIncomingDeposits([], [{ ...deposit, isMature: true, claimError: { tag: "MaxDepositClaimFeeExceeded" } }], new Map(), 100)[0])
-    .toMatchObject({ status: "pending", statusLabel: "Needs attention" });
+    .toMatchObject({ status: "pending", statusLabel: "Fee approval needed", depositClaim: "fee-required" });
   expect(withIncomingDeposits([], [{ ...deposit, refundTxId: "b".repeat(64) }], new Map(), 100)[0])
     .toMatchObject({ status: "pending", statusLabel: "Refund pending" });
+});
+
+it("does not offer another approval for submitted or fee-approved deposits", () => {
+  const blocked = { ...deposit, isMature: true, claimError: { tag: "MaxDepositClaimFeeExceeded", inner: { requiredFeeSats: 300n } } };
+  const submitted = withIncomingDeposits([], [{ ...blocked, instantClaimStatus: { tag: "Submitted" } }], new Map(), 100)[0];
+  expect(submitted).toMatchObject({ status: "pending", statusLabel: "Adding to balance", depositClaim: "submitted" });
+  const approved = withIncomingDeposits([], [{ ...blocked, maxClaimFee: { tag: "Fixed", inner: { amount: 300n } } }], new Map(), 100)[0];
+  expect(approved).toMatchObject({ status: "pending", statusLabel: "Adding to balance", depositClaim: "approved" });
+  const higher = withIncomingDeposits([], [{ ...blocked, maxClaimFee: { tag: "Fixed", inner: { amount: 200n } } }], new Map(), 100)[0];
+  expect(higher.depositClaim).toBe("fee-required");
 });
