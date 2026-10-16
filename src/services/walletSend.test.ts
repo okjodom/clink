@@ -10,7 +10,7 @@ jest.mock("@breeztech/breez-sdk-spark-react-native", () => {
   };
   return {
     connect: jest.fn(), defaultConfig: () => ({}), Network: { Mainnet: "mainnet" },
-    Seed: { Mnemonic: class {} }, PaymentRequest: { Input: class { constructor(public inner: unknown) {} } },
+    Seed: { Mnemonic: class {} }, MaxFee: { Rate: class { tag = "Rate"; constructor(public inner: unknown) {} } }, PaymentRequest: { Input: class { constructor(public inner: unknown) {} } },
     InputType: Object.fromEntries(["Bolt11Invoice", "LightningAddress", "LnurlPay", "BitcoinAddress", "SparkAddress", "SparkInvoice", "CrossChainAddress", "Bip21"].map((tag) => [tag, variant(tag)])),
   };
 });
