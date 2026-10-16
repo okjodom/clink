@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/okjodom/clink/compare/v0.4.0...v0.5.0) (2026-10-16)
+
+
+### Features
+
+* enforce display name sentence case and refresh Clinker branding ([15085ff](https://github.com/okjodom/clink/commit/15085ffc406a02f39e70e675fc5f257cc12ca6be))
+* review and approve blocked Bitcoin deposit fees ([9d69f3c](https://github.com/okjodom/clink/commit/9d69f3c3bfea4ad3a744d4459230a2440fb59143))
+* share the username QR from the wallet header ([dca0a31](https://github.com/okjodom/clink/commit/dca0a3136bc89ec09981142129397aa6cd6df861))
+
+
+### Bug Fixes
+
+* label the profile tab consistently ([32cc5d0](https://github.com/okjodom/clink/commit/32cc5d05fc9d7bc4dfe28a6ac01839a2227a1d71))
+* use QR icons for code sharing actions ([581ab0d](https://github.com/okjodom/clink/commit/581ab0d2b12c8aede8c357f3d86298ab6e2dda8f))
+
+
+### Code Refactoring
+
+* rename the profile tab route ([851779e](https://github.com/okjodom/clink/commit/851779ebbf6c1fd7056def047c5ad889869e0afd))
+
 ## [0.4.0](https://github.com/okjodom/clink/compare/v0.3.1...v0.4.0) (2026-10-16)
 
 
