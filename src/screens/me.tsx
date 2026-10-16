@@ -17,10 +17,11 @@ import { useAgent } from "../store/agent";
 import { useSession } from "../store/session";
 import { useSwaps } from "../store/swaps";
 import { useWallet } from "../store/wallet";
-import { Avatar, Badge, Button, Card, Divider, Empty, Field, IconButton, Notice, Row, Screen, Section, Segmented, Text, Toggle, success } from "../ui/components";
-import { CopyField, QrShareSheet, Sheet, confirm, toast } from "../ui/extras";
+import { Avatar, Badge, Button, Card, Divider, Empty, Field, Notice, Row, Screen, Section, Segmented, Text, Toggle, success } from "../ui/components";
+import { CopyField, Sheet, confirm, toast } from "../ui/extras";
 import { SwapRow } from "../ui/rows";
 import { space, useColors } from "../ui/theme";
+import { UsernameShareButton } from "../ui/usernameShare";
 import { useConfirmLeaveAgent } from "./agent";
 import { ClaimAddressSheet } from "./receive";
 import { setAgentOnline } from "../services/agentLoop";
@@ -70,7 +71,6 @@ export function ActivityScreen() {
 
 export function MeScreen() {
   const nav = useNavigation<any>();
-  const [shareOpen, setShareOpen] = useState(false);
   const c = useColors();
   const { keys, profile, mode, setMode, backedUp, currency, setCurrency, setProfile, preferSats, togglePreferSats } = useSession();
   const configured = useAgent((s) => s.configured);
@@ -86,7 +86,7 @@ export function MeScreen() {
     <Screen
       large
       title="Profile"
-      right={lnAddress ? <IconButton name="share-2" label="Share my username" onPress={() => setShareOpen(true)} /> : undefined}
+      right={<UsernameShareButton />}
     >
       <Card style={{ flexDirection: "row", alignItems: "center" }} onPress={() => setNameOpen(true)}>
         <Avatar pk={keys.identity.pk} name={profile.name} size={52} />
@@ -194,16 +194,6 @@ export function MeScreen() {
         />
       </Sheet>
       <ClaimAddressSheet visible={claimOpen} onClose={() => setClaimOpen(false)} />
-      {lnAddress && (
-        <QrShareSheet
-          visible={shareOpen}
-          onClose={() => setShareOpen(false)}
-          title={lnAddress}
-          caption="Anyone can scan this to pay you. Save it to print or share."
-          value={lnAddress}
-          fileName={lnAddress.split("@")[0]}
-        />
-      )}
     </Screen>
   );
 }

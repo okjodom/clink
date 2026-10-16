@@ -17,6 +17,7 @@ import { Sheet, toast, toastError } from "../ui/extras";
 import { SwapRow, TxRow } from "../ui/rows";
 import { ActivityShimmer, ActivitySkeleton } from "../ui/activityLoading";
 import { radius, space, useColors } from "../ui/theme";
+import { UsernameShareButton } from "../ui/usernameShare";
 
 /**
  * The money, and what you do with it. One number in your own
@@ -189,6 +190,7 @@ export function HomeScreen() {
           </Text>
           <Text variant="title">{name || "Your wallet"}</Text>
         </View>
+        <UsernameShareButton />
       </View>
 
       <WalletHero />
