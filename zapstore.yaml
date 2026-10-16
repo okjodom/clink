@@ -17,6 +17,11 @@ tags:
   - lightning
 icon: ./assets/icon.png
 images:
-  - ./docs/screenshots/01-home.png
-  - ./docs/screenshots/02-receive.png
-  - ./docs/screenshots/07-desk.png
+  - ./docs/store-listing/01-wallet.png
+  - ./docs/store-listing/02-receive.png
+  - ./docs/store-listing/03-send.png
+  - ./docs/store-listing/04-payment-qr.png
+  - ./docs/store-listing/07-add-money.png
+  - ./docs/store-listing/08-cash-out.png
+  - ./docs/store-listing/05-agent.png
+  - ./docs/store-listing/06-balance.png

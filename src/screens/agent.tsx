@@ -353,7 +353,7 @@ export function AgentSetupScreen() {
       </Section>
 
       <Section title="4 · Your name">
-        <Field value={name} onChangeText={setName} placeholder="e.g. Wanjiku's shop" maxLength={48} />
+        <Field value={name} onChangeText={setName} placeholder="e.g. Wanjiku's shop" autoCapitalize="sentences" maxLength={48} />
       </Section>
 
       <Collapsible title="More">

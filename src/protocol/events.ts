@@ -4,6 +4,7 @@
  * and escrow kernel actions, resolver for dispute resolutions.
  */
 import type { EventTemplate } from "nostr-tools/pure";
+import { sentenceCaseName } from "../lib/displayName";
 
 import {
   AGENT_D_TAG,
@@ -91,7 +92,7 @@ export function offerTemplate(offer: OfferContent): EventTemplate {
 }
 
 export function profileTemplate(meta: { name: string; about?: string; picture?: string; lud16?: string }): EventTemplate {
-  const clean = Object.fromEntries(Object.entries(meta).filter(([, v]) => v));
+  const clean = Object.fromEntries(Object.entries({ ...meta, name: sentenceCaseName(meta.name) }).filter(([, v]) => v));
   return { kind: KIND.profile, created_at: now(), tags: [], content: JSON.stringify(clean) };
 }
 

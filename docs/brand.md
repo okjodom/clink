@@ -50,6 +50,15 @@ Never show "up" or "down" by colour alone. Red means *up* in much of East Asia, 
 - The stable balance is **Dollars**; the other is **Bitcoin**. Show both in local currency first. "Holds its value in dollars", never "your money never changes".
 - Celebrate money arriving ("Clink!"), not spending.
 
+## Clinker
+
+**Clinker** is Clink's mascot name and the demo profile used for screenshots.
+The display name is **Clinker**; the payment username is **clinker**, at
+**clinker@breez.tips**. Display names use sentence case; payment usernames stay lowercase.
+
+Use fresh device captures from `docs/screenshots/`. The store artwork and its
+rebuild instructions are in [store-listing/README.md](store-listing/README.md).
+
 ## Names and symbols to avoid in these markets
 
 - Pigs and piggy banks: offensive in Indonesia, Pakistan, Malaysia, North Africa.
