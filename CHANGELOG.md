@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/okjodom/clink/compare/v0.3.1...v0.4.0) (2026-10-16)
+
+
+### Features
+
+* restore wallets with twelve numbered word fields ([7cd6839](https://github.com/okjodom/clink/commit/7cd6839cb9c695dd6acc4c3ff6f9f01bc02bb565))
+
+
+### Bug Fixes
+
+* detect signing keystore format before Zapstore publication ([82c4ab2](https://github.com/okjodom/clink/commit/82c4ab22d217b65f4afe249d32d9e83362f8451f))
+* keep recovery name actions above the keyboard ([df71807](https://github.com/okjodom/clink/commit/df71807b86919e3198fba05c2cddd5e7b3e366f8))
+* keep relay catch-up and cache encryption responsive ([50b87c0](https://github.com/okjodom/clink/commit/50b87c072883f80a2cacc0f59157b3e4896c2713))
+* support amountless invoices in the send flow ([77d35ae](https://github.com/okjodom/clink/commit/77d35ae5df035ce99cb503d41a73b937dcebc61f))
+
 ## [0.3.1](https://github.com/okjodom/clink/compare/v0.3.0...v0.3.1) (2026-10-15)
 
 
