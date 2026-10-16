@@ -8,7 +8,7 @@ export function UsernameShareButton() {
   const [open, setOpen] = useState(false);
   if (!address) return null;
   return <>
-    <IconButton name="share-2" label="Share my username" onPress={() => setOpen(true)} />
+    <IconButton name="qr-code" label="Show payment QR" onPress={() => setOpen(true)} />
     <QrShareSheet
       visible={open}
       onClose={() => setOpen(false)}

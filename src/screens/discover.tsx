@@ -169,7 +169,7 @@ export function AgentProfileScreen() {
 
   const self = me === pk;
   return (
-    <Screen back right={<IconButton name="share-2" label="Share" onPress={() => setQr(true)} />}>
+    <Screen back right={<IconButton name="qr-code" label="Show agent QR" onPress={() => setQr(true)} />}>
       <View style={{ alignItems: "center", gap: space.sm }}>
         <Avatar pk={pk} name={listing.profile.name} size={84} />
         <Text variant="title">{listing.profile.name ?? "Unnamed agent"}</Text>
