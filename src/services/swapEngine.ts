@@ -50,6 +50,7 @@ import { useWallet } from "../store/wallet";
 import type { AgentListing } from "./discovery";
 import { publish, publishAll, query, resetPool, sign, subscribe } from "./nostr";
 import * as wallet from "./wallet";
+import { eventQueue } from "./eventQueue";
 
 const now = () => Math.floor(Date.now() / 1000);
 const WRAP_LOOKBACK = 4 * 24 * 60 * 60;
@@ -87,10 +88,16 @@ export function startEngine(ring: KeyRing) {
 
 function beginEngine(ring: KeyRing) {
   const me = ring.identity.pk;
+  const started = generation;
+  const knownWraps = new Set(Object.values(useSwaps.getState().records).flatMap((rec) => rec.wrapIds ?? []));
+  const wraps = eventQueue<Event>((event) => ingestWrap(event, started, knownWraps), (error) => {
+    if (__DEV__) console.warn("Swap message unavailable:", errorText(error));
+  });
   stopFns.push(
+    () => wraps.stop(),
     wallet.onWalletEvent(() => { for (const id of activeIds()) schedule(id); }),
-    subscribe([{ kinds: [KIND.root], "#p": [me] }], (e) => void ingestRoot(e)),
-    subscribe([{ kinds: [KIND.giftWrap], "#p": [me], since: now() - WRAP_LOOKBACK }], (e) => void ingestWrap(e)),
+    subscribe([{ kinds: [KIND.root], "#p": [me] }], (e) => void ingestRoot(e), undefined, (id) => !!useSwaps.getState().records[id]),
+    subscribe([{ kinds: [KIND.giftWrap], "#p": [me], since: now() - WRAP_LOOKBACK }], (e) => wraps.push(e), undefined, (id) => knownWraps.has(id)),
     useSwaps.subscribe(() => refreshActionSubscription()),
   );
   refreshActionSubscription();
@@ -172,10 +179,12 @@ async function backfill() {
 
 async function ingestRoot(e: Event) {
   const ring = keys;
+  const started = generation;
   if (!ring) return;
   const rec = useSwaps.getState().upsertRoot(e, ring.identity.pk);
   if (!rec) return;
   const actions = await query({ kinds: [KIND.action], "#e": [e.id] });
+  if (started !== generation) return;
   useSwaps.getState().addActions(e.id, actions);
   schedule(e.id);
 }
@@ -186,19 +195,21 @@ function ingestAction(e: Event) {
   if (useSwaps.getState().addActions(rootId, [e])) schedule(rootId);
 }
 
-async function ingestWrap(wrap: Event) {
+async function ingestWrap(wrap: Event, started: number, known: Set<string>) {
   const ring = keys;
-  if (!ring) return;
+  if (!ring || started !== generation || known.has(wrap.id)) return;
   const item = openWrap(wrap, ring.identity.sk);
   if (!item) return;
   let rec: SwapRecord | null = useSwaps.getState().records[item.coordination] ?? null;
   if (!rec) {
     // A request can arrive before its root reaches our relays' subscription.
     const [root] = await query({ ids: [item.coordination], kinds: [KIND.root] });
+    if (started !== generation) return;
     if (!root) return;
     rec = useSwaps.getState().upsertRoot(root, ring.identity.pk);
     if (!rec) return;
     const actions = await query({ kinds: [KIND.action], "#e": [root.id] });
+    if (started !== generation) return;
     useSwaps.getState().addActions(root.id, actions);
   }
   // Only the two participants may speak in a swap's private channel.
@@ -206,7 +217,8 @@ async function ingestWrap(wrap: Event) {
   const parties = [st.root.agent, st.root.customer];
   if (!parties.includes(item.from) || !parties.includes(item.to)) return;
   if (item.payload && !parties.every((p) => item.payload!.participants.includes(p))) return;
-  if (useSwaps.getState().addInbox(item)) schedule(item.coordination);
+  if (useSwaps.getState().addInbox(item, wrap.id)) schedule(item.coordination);
+  known.add(wrap.id);
 }
 
 // -- helpers -----------------------------------------------------------------
@@ -249,7 +261,7 @@ async function send(id: string, body: PayloadBody) {
   await publishAll(wraps);
   // Our self-copy lands via the subscription; record it now for idempotency.
   const self = openWrap(wraps[1], ring.identity.sk);
-  if (self) useSwaps.getState().addInbox(self);
+  if (self) useSwaps.getState().addInbox(self, wraps[1].id);
 }
 
 function sentByMe(rec: SwapRecord, type: PayloadBody["type"]) {

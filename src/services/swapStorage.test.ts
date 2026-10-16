@@ -1,8 +1,12 @@
+jest.mock("expo-crypto", () => require("./nativeCryptoMock").nativeCryptoMock());
 jest.mock("@react-native-async-storage/async-storage", () => ({
   getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn(),
 }));
 jest.mock("./secure", () => ({ getSecret: jest.fn(), setSecret: jest.fn() }));
 
+import { encrypt } from "nostr-tools/nip44";
+import { hexToBytes } from "@noble/hashes/utils.js";
+import { aesEncryptAsync } from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getSecret, setSecret } from "./secure";
 import { encryptedSwapStorage as storage } from "./swapStorage";
@@ -31,7 +35,7 @@ it("migrates legacy plaintext before returning it", async () => {
   const value = JSON.stringify({ state: { inbox: [{ preimage: "legacy-secret" }] } });
   disk.swaps = value;
   expect(await storage.getItem("swaps")).toBe(value);
-  expect(disk.swaps).toMatch(/^encrypted-v1:/);
+  expect(disk.swaps).toMatch(/^encrypted-v2:/);
   expect(disk.swaps).not.toContain("legacy-secret");
 });
 
@@ -54,4 +58,22 @@ it("does not write plaintext when protected key creation fails", async () => {
   jest.mocked(setSecret).mockRejectedValueOnce(new Error("locked device"));
   await expect(storage.setItem("swaps", "private")).rejects.toThrow("locked device");
   expect(disk.swaps).toBeUndefined();
+});
+
+it("migrates authenticated NIP-44 snapshots to native AES without exposing plaintext", async () => {
+  secret = "ab".repeat(32);
+  disk.swaps = "encrypted-v1:" + encrypt(JSON.stringify({ name: "swaps", value: "legacy private history" }), hexToBytes(secret));
+  expect(await storage.getItem("swaps")).toBe("legacy private history");
+  expect(disk.swaps).toMatch(/^encrypted-v2:/);
+  expect(disk.swaps).not.toContain("legacy private history");
+  expect(await storage.getItem("swaps")).toBe("legacy private history");
+});
+
+it("retains the old authenticated cache if native migration fails", async () => {
+  secret = "ab".repeat(32);
+  const original = "encrypted-v1:" + encrypt(JSON.stringify({ name: "swaps", value: "private" }), hexToBytes(secret));
+  disk.swaps = original;
+  jest.mocked(aesEncryptAsync).mockRejectedValueOnce(new Error("native encryption failed"));
+  await expect(storage.getItem("swaps")).rejects.toThrow("native encryption failed");
+  expect(disk.swaps).toBe(original);
 });

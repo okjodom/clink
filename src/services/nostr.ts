@@ -100,7 +100,7 @@ export function latestByAddress(events: Event[]): Event[] {
  * "online" while no request ever reaches it. Each relay is subscribed on its
  * own so one dead relay recovers even while the others are fine.
  */
-export function subscribe(filters: Filter[], onEvent: (e: Event) => void, onEose?: () => void): () => void {
+export function subscribe(filters: Filter[], onEvent: (e: Event) => void, onEose?: () => void, alreadyHaveEvent?: (id: string) => boolean): () => void {
   if (!relays.length) return () => undefined;
   let stopped = false;
   let eosePending = relays.length;
@@ -117,6 +117,9 @@ export function subscribe(filters: Filter[], onEvent: (e: Event) => void, onEose
   const open = (url: string, f: Filter, key: string, attempt: number) => {
     let eosed = false;
     const sub = p().subscribeMany([url], f, {
+      // Drop known IDs before signature verification, including across relays.
+      // New events still pass the pool's signature verification unchanged.
+      alreadyHaveEvent: (id) => seen.has(id) || !!alreadyHaveEvent?.(id),
       onevent: deliver,
       oneose: () => {
         if (!eosed && attempt === 0 && key.endsWith("#0") && --eosePending === 0) onEose?.();

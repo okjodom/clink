@@ -1,14 +1,16 @@
-jest.mock("nostr-tools/pool", () => ({ SimplePool: jest.fn(() => ({ publish: mockPublish, destroy: jest.fn() })) }));
+jest.mock("nostr-tools/pool", () => ({ SimplePool: jest.fn(() => ({ publish: mockPublish, subscribeMany: mockSubscribe, destroy: jest.fn() })) }));
 
 import type { Event } from "nostr-tools/pure";
-import { publish, resetPool, setRelays } from "./nostr";
+import { publish, resetPool, setRelays, subscribe } from "./nostr";
 
 const mockPublish = jest.fn();
+const mockSubscribe = jest.fn();
 const event = { id: "test-event" } as Event;
 
 beforeEach(() => {
   jest.useFakeTimers();
   mockPublish.mockReset();
+  mockSubscribe.mockReset().mockImplementation(() => ({ close: jest.fn() }));
   resetPool();
   setRelays(["wss://fast", "wss://slow"]);
 });
@@ -35,4 +37,19 @@ it("never reports success if every relay rejects the event", async () => {
   mockPublish.mockReturnValue([Promise.reject(new Error("offline")), Promise.reject(new Error("rejected"))]);
   await expect(publish(event)).rejects.toThrow("No relay accepted the event");
   expect(jest.getTimerCount()).toBe(0);
+});
+
+it("drops known events before verification and shares delivered IDs across relays", () => {
+  const deliver = jest.fn();
+  const stop = subscribe([{ kinds: [1059] }], deliver, undefined, (id) => id === "cached");
+  const first = mockSubscribe.mock.calls[0][2];
+  const second = mockSubscribe.mock.calls[1][2];
+  expect(first.alreadyHaveEvent("cached")).toBe(true);
+  expect(first.alreadyHaveEvent("new")).toBe(false);
+  first.onevent({ id: "new" }); // The pool invokes this only after verification.
+  expect(second.alreadyHaveEvent("new")).toBe(true);
+  expect(second.alreadyHaveEvent("unknown")).toBe(false);
+  second.onevent({ id: "new" });
+  expect(deliver).toHaveBeenCalledTimes(1);
+  stop();
 });

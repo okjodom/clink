@@ -1,3 +1,4 @@
+jest.mock("expo-crypto", () => require("./nativeCryptoMock").nativeCryptoMock());
 jest.mock("@react-native-async-storage/async-storage", () => {
   const disk: Record<string, string> = {};
   return {
@@ -282,4 +283,51 @@ it("does not reuse a legacy secured payment whose cache predates bindings", asyn
   useSwaps.getState().addActions(legacy, [accept, secure]);
   const candidate = swap(); announce(candidate);
   expect((await verifyIncomingLock(candidate)).ok).toBe(false);
+});
+
+it("persists processed wrap IDs even after claimed preimages are removed", async () => {
+  const id = swap();
+  const wrapId = "dd".repeat(32);
+  const item = { id: "release-rumor", from: customer, to: agent, createdAt: 100,
+    coordination: id, kind: "payload" as const, payload: { type: "release", preimage: "ee".repeat(32) } as SwapPayload };
+  expect(useSwaps.getState().addInbox(item, wrapId)).toBe(true);
+  const rec = useSwaps.getState().records[id];
+  expect(useSwaps.getState().addInbox(item, wrapId)).toBe(false);
+  expect(useSwaps.getState().records[id]).toBe(rec);
+  useSwaps.getState().patchLocal(id, { claimedAt: 100 });
+  await persistPaymentBindings();
+  const written = jest.mocked(AsyncStorage.setItem).mock.calls.at(-1)![1];
+  jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce(written);
+  const saved = JSON.parse((await encryptedSwapStorage.getItem("pontmore.swaps"))!);
+  expect(saved.state.records[id].wrapIds).toEqual([wrapId]);
+  expect(saved.state.records[id].inbox).toEqual([]);
+  useSwaps.setState(saved.state);
+  startEngine(agentRing);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    const giftWrap = jest.mocked(nostr.subscribe).mock.calls.find(([filters]) => filters[0].kinds?.includes(1059));
+    expect(giftWrap?.[3]?.(wrapId)).toBe(true);
+    expect(giftWrap?.[3]?.("ff".repeat(32))).toBe(false);
+  } finally { stopEngine(); }
+});
+
+it("does not persist or notify when a background duty repeats the same local value", () => {
+  const id = swap();
+  useSwaps.getState().patchLocal(id, { lastError: "offline" });
+  const before = useSwaps.getState().records;
+  useSwaps.getState().patchLocal(id, { lastError: "offline" });
+  expect(useSwaps.getState().records).toBe(before);
+});
+
+it("indexes replayed outer IDs without making an old message new again", () => {
+  const id = swap();
+  const item = { id: "legacy-rumor", from: customer, to: agent, createdAt: 100, coordination: id, kind: "chat" as const, text: "Hi" };
+  useSwaps.getState().addInbox(item);
+  const before = useSwaps.getState().records[id];
+  expect(useSwaps.getState().addInbox(item, "aa".repeat(32))).toBe(false);
+  expect(useSwaps.getState().addInbox(item, "bb".repeat(32))).toBe(false);
+  const after = useSwaps.getState().records[id];
+  expect(after.inbox).toEqual([item]);
+  expect(after.updatedAt).toBe(before.updatedAt);
+  expect(after.wrapIds).toEqual(["aa".repeat(32), "bb".repeat(32)]);
 });
