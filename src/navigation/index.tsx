@@ -64,7 +64,7 @@ function Tabs() {
   useEffect(() => {
     if (!focused || previousMode.current === mode) return;
     previousMode.current = mode;
-    // Me exists in both modes, so React Navigation otherwise preserves it.
+    // Profile exists in both modes, so React Navigation otherwise preserves it.
     // Wait for Main to regain focus if mode changed inside agent setup.
     nav.navigate("Main", { screen: mode === "agent" ? "Desk" : "Home" });
   }, [mode, focused, nav]);
@@ -92,12 +92,12 @@ function Tabs() {
         <>
           <Tab.Screen name="Desk" component={DeskScreen} options={{ tabBarIcon: icon("briefcase"), ...badge }} />
           <Tab.Screen name="Wallet" component={HomeScreen} options={{ tabBarIcon: icon("credit-card") }} />
-          <Tab.Screen name="Me" component={MeScreen} options={{ title: "Profile", tabBarIcon: icon("user") }} />
+          <Tab.Screen name="Profile" component={MeScreen} options={{ tabBarIcon: icon("user") }} />
         </>
       ) : (
         <>
           <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: "Wallet", tabBarIcon: icon("credit-card"), ...badge }} />
-          <Tab.Screen name="Me" component={MeScreen} options={{ title: "Profile", tabBarIcon: icon("user") }} />
+          <Tab.Screen name="Profile" component={MeScreen} options={{ tabBarIcon: icon("user") }} />
         </>
       )}
     </Tab.Navigator>
