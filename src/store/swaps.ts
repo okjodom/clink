@@ -35,6 +35,8 @@ export interface SwapRecord {
   root: Event;
   actions: Event[];
   inbox: InboxItem[];
+  /** Processed outer IDs survive removal of claimed preimages from the cache. */
+  wrapIds?: string[];
   role: SwapRole;
   local: SwapLocal;
   updatedAt: number;
@@ -46,7 +48,7 @@ interface SwapsState {
   bindPayment(rootId: string, hash: string, paymentId?: string): boolean;
   upsertRoot(root: Event, myPk: string): SwapRecord | null;
   addActions(rootId: string, events: Event[]): boolean;
-  addInbox(item: InboxItem): boolean;
+  addInbox(item: InboxItem, wrapId?: string): boolean;
   patchLocal(rootId: string, patch: Partial<SwapLocal>): void;
   markRead(rootId: string): void;
   clear(): void;
@@ -105,12 +107,19 @@ export const useSwaps = create<SwapsState>()(
         return true;
       },
 
-      addInbox(item) {
+      addInbox(item, wrapId) {
         const rec = get().records[item.coordination];
-        if (!rec || rec.inbox.some((i) => i.id === item.id)) return false;
+        if (!rec) return false;
+        const wrapIds = wrapId && !rec.wrapIds?.includes(wrapId) ? [...rec.wrapIds ?? [], wrapId] : rec.wrapIds;
+        const existing = rec.inbox.find((i) => i.id === item.id);
+        if (existing) {
+          // Upgrade old caches without treating a replay as a new message.
+          if (wrapIds !== rec.wrapIds) set((s) => ({ records: { ...s.records, [rec.id]: { ...rec, wrapIds } } }));
+          return false;
+        }
         const inbox = [...rec.inbox, item].sort((a, b) => a.createdAt - b.createdAt);
         set((s) => ({
-          records: { ...s.records, [rec.id]: { ...rec, inbox, updatedAt: Math.max(rec.updatedAt, item.createdAt) } },
+          records: { ...s.records, [rec.id]: { ...rec, inbox, wrapIds, updatedAt: Math.max(rec.updatedAt, item.createdAt) } },
         }));
         return true;
       },
@@ -118,6 +127,7 @@ export const useSwaps = create<SwapsState>()(
       patchLocal(rootId, patch) {
         const rec = get().records[rootId];
         if (!rec) return;
+        if (Object.entries(patch).every(([key, value]) => Object.is(rec.local[key as keyof SwapLocal], value))) return;
         set((s) => ({ records: { ...s.records, [rootId]: { ...rec, local: { ...rec.local, ...patch } } } }));
       },
 
