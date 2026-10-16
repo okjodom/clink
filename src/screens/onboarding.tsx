@@ -108,6 +108,7 @@ export function PickNameScreen() {
   };
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + space.xxl, paddingBottom: insets.bottom + space.lg }}>
       <View style={{ paddingHorizontal: space.xl, gap: space.lg, flex: 1 }}>
         <Text variant="display">What should people call you?</Text>
@@ -134,6 +135,7 @@ export function PickNameScreen() {
         </Pressable>
       </View>
     </View>
+    </KeyboardAvoidingView>
   );
 }
 
