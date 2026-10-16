@@ -92,12 +92,12 @@ function Tabs() {
         <>
           <Tab.Screen name="Desk" component={DeskScreen} options={{ tabBarIcon: icon("briefcase"), ...badge }} />
           <Tab.Screen name="Wallet" component={HomeScreen} options={{ tabBarIcon: icon("credit-card") }} />
-          <Tab.Screen name="Me" component={MeScreen} options={{ tabBarIcon: icon("user") }} />
+          <Tab.Screen name="Me" component={MeScreen} options={{ title: "Profile", tabBarIcon: icon("user") }} />
         </>
       ) : (
         <>
           <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: "Wallet", tabBarIcon: icon("credit-card"), ...badge }} />
-          <Tab.Screen name="Me" component={MeScreen} options={{ tabBarIcon: icon("user") }} />
+          <Tab.Screen name="Me" component={MeScreen} options={{ title: "Profile", tabBarIcon: icon("user") }} />
         </>
       )}
     </Tab.Navigator>
