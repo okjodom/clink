@@ -146,7 +146,7 @@ export function Header({ title, back, onBack, right }: { title?: string; back?: 
   );
 }
 
-export function IconButton({ name, onPress, label }: { name: IconName; onPress: () => void; label?: string }) {
+export function IconButton({ name, onPress, label }: { name: IconName | "qr-code"; onPress: () => void; label?: string }) {
   const c = useColors();
   return (
     <Pressable
@@ -158,7 +158,14 @@ export function IconButton({ name, onPress, label }: { name: IconName; onPress: 
       }}
       style={({ pressed }) => [styles.iconBtn, { backgroundColor: c.surface, opacity: pressed ? 0.65 : 1 }]}
     >
-      <Feather name={name} size={19} color={c.text} />
+      {name === "qr-code" ? (
+        <Svg width={19} height={19} viewBox="0 0 24 24" fill="none" stroke={c.text} strokeWidth={1.8}>
+          <Rect x={3} y={3} width={7} height={7} rx={1} />
+          <Rect x={14} y={3} width={7} height={7} rx={1} />
+          <Rect x={3} y={14} width={7} height={7} rx={1} />
+          <Path d="M6 6h1v1H6z M17 6h1v1h-1z M6 17h1v1H6z M14 14h3v3h-3z M20 14h1v3 M14 20v1h3 M20 20h1v1h-1z" />
+        </Svg>
+      ) : <Feather name={name} size={19} color={c.text} />}
     </Pressable>
   );
 }

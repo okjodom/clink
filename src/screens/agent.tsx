@@ -72,7 +72,7 @@ export function DeskScreen() {
   };
 
   return (
-    <Screen large title="Agent desk" right={<IconButton name="share-2" label="Share your desk" onPress={() => setShare(true)} />}>
+    <Screen large title="Agent desk" right={<IconButton name="qr-code" label="Show agent QR" onPress={() => setShare(true)} />}>
       <View style={{ backgroundColor: c.hero, borderRadius: radius.xl, padding: space.xl, gap: space.lg }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
           {online ? (
