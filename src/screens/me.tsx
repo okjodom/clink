@@ -85,7 +85,7 @@ export function MeScreen() {
   return (
     <Screen
       large
-      title="Me"
+      title="Profile"
       right={lnAddress ? <IconButton name="share-2" label="Share my username" onPress={() => setShareOpen(true)} /> : undefined}
     >
       <Card style={{ flexDirection: "row", alignItems: "center" }} onPress={() => setNameOpen(true)}>
