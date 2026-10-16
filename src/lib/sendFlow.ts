@@ -16,6 +16,15 @@ export function quoteProblem(amount: bigint, fee: bigint, balance: bigint | null
   return balance !== null && amount + fee > balance ? "Not enough for this payment and its fee." : null;
 }
 
+/** Fixed requests cannot be overridden; open destinations need a positive amount. */
+export function sendAmount(input: { amountSats?: bigint }, entered?: bigint): bigint {
+  if (input.amountSats !== undefined) {
+    if (entered !== undefined && entered !== input.amountSats) throw new Error("This payment request has a fixed amount.");
+    if (input.amountSats > 0n) return input.amountSats;
+  } else if (entered !== undefined && entered > 0n) return entered;
+  throw new Error("Enter an amount greater than zero.");
+}
+
 export function shortRecipient(value: string): string {
   return value.length > 36 ? `${value.slice(0, 16)}…${value.slice(-12)}` : value;
 }
