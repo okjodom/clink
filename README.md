@@ -14,7 +14,7 @@
 
 **Money that just works.** Download it, pick a name, and you can get paid, pay anyone, and add money or cash out to mobile money, bank or cash through people near you. When money lands, your phone goes *clink*.
 
-Under the hood it's a bitcoin wallet only you hold, with no bank, account or server in the middle. That part is there for anyone who goes looking (Me → *Your keys, your money*), not something you need to understand to use it.
+Under the hood it's a bitcoin wallet only you hold, with no bank, account or server in the middle. That part is there for anyone who goes looking (Profile → *Your keys, your money*), not something you need to understand to use it.
 
 Clink is a mobile client for the [Pontmore protocol](https://github.com/pontmore/protocol). Every swap is coordinated in public, signed Nostr events, and the bitcoin is locked in a Spark HTLC between the two people trading. Nobody else ever holds it. There is no Clink server, no account and no sign-up: the app talks to Nostr relays and to your own [Breez](https://breez.technology) Spark wallet, and nothing else.
 
@@ -31,25 +31,34 @@ Clink is a mobile client for the [Pontmore protocol](https://github.com/pontmore
 
 ## Screens
 
-### Personal mode: one balance, dollars or bitcoin, USDT/USDC in and out
+### Personal mode: pay, get paid, add money and cash out
 
-<p align="center"><img src="docs/user-mode.png" alt="Wallet, receive, add money, get USDT or USDC, and the dollars or bitcoin choice" width="100%" /></p>
+<p align="center"><img src="docs/user-mode.png" alt="Clinker wallet, receive at clinker@breez.tips, send, add money and cash out with an available agent" width="100%" /></p>
 
 ### Agent mode: run a swap desk from your phone
 
-<p align="center"><img src="docs/agent-mode.png" alt="Agent desk, your offer, more settings and a finished swap" width="100%" /></p>
+<p align="center"><img src="docs/agent-mode.png" alt="An open Clinker agent desk, offer settings, agent QR and Profile" width="100%" /></p>
+
+Fresh device captures use **Clinker** and **clinker@breez.tips**. Captioned 1080 × 1920 images for store listings are in [docs/store-listing](docs/store-listing/README.md).
 
 <details>
 <summary>All screenshots</summary>
 
-| | | | | |
-| --- | --- | --- | --- | --- |
-| <img src="docs/screenshots/01-home.png" width="160" alt="Wallet home: one balance, held in dollars"> | <img src="docs/screenshots/02-receive.png" width="160" alt="Receive with your username"> | <img src="docs/screenshots/03-add-money.png" width="160" alt="Add money from M-Pesa through an agent"> | <img src="docs/screenshots/04-stablecoin.png" width="160" alt="Get paid in USDT or USDC"> | <img src="docs/screenshots/05-hold-in.png" width="160" alt="Keep your money in dollars or bitcoin"> |
-| Wallet | Receive | Add money | USDT or USDC | Dollars or bitcoin |
-| <img src="docs/screenshots/06-me.png" width="160" alt="Me: username, earn as an agent, settings"> | <img src="docs/screenshots/07-desk.png" width="160" alt="Agent desk"> | <img src="docs/screenshots/08-offer.png" width="160" alt="Your offer"> | <img src="docs/screenshots/09-offer-more.png" width="160" alt="More offer settings"> | <img src="docs/screenshots/10-swap-done.png" width="160" alt="A finished swap"> |
-| Me | Agent desk | Your offer | More settings | Finished swap |
+| Wallet | Receive | Add money | USDT or USDC |
+| --- | --- | --- | --- |
+| <img src="docs/screenshots/01-home.png" width="180" alt="Clinker wallet"> | <img src="docs/screenshots/02-receive.png" width="180" alt="Receive at clinker@breez.tips"> | <img src="docs/screenshots/03-add-money.png" width="180" alt="Add KES 20 with the live Clinker agent"> | <img src="docs/screenshots/04-stablecoin.png" width="180" alt="Receive USDT or USDC"> |
 
-Composites are built with `python3 scripts/compose-screenshots.py docs/user-mode.png "Wallet=docs/screenshots/01-home.png" …`.
+| Dollars or bitcoin | Profile | Agent desk | Your offer |
+| --- | --- | --- | --- |
+| <img src="docs/screenshots/05-hold-in.png" width="180" alt="Choose dollars or bitcoin"> | <img src="docs/screenshots/06-profile.png" width="180" alt="Clinker profile"> | <img src="docs/screenshots/07-desk.png" width="180" alt="Open agent desk"> | <img src="docs/screenshots/08-offer.png" width="180" alt="Agent offer and fee limits"> |
+
+| Send | Activity | Payment QR | Agent QR |
+| --- | --- | --- | --- |
+| <img src="docs/screenshots/09-send.png" width="180" alt="Choose who to pay"> | <img src="docs/screenshots/10-activity.png" width="180" alt="Activity search and filter"> | <img src="docs/screenshots/11-payment-qr.png" width="180" alt="Clinker payment QR"> | <img src="docs/screenshots/12-agent-qr.png" width="180" alt="Clinker agent QR"> |
+
+[Cash out with Clinker](docs/screenshots/13-cash-out.png) shows the matching sell flow with an available agent.
+
+Composites are built with `python3 scripts/compose-screenshots.py`; store artwork is built with `python3 scripts/compose-store-screenshots.py`.
 
 </details>
 

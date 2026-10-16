@@ -113,7 +113,7 @@ export function PickNameScreen() {
       <View style={{ paddingHorizontal: space.xl, gap: space.lg, flex: 1 }}>
         <Text variant="display">What should people call you?</Text>
         <Text muted>Friends pay you by this name, and agents see it when you add money or cash out.</Text>
-        <Field value={name} onChangeText={setName} placeholder="Your name" autoFocus maxLength={48} returnKeyType="done" onSubmitEditing={done} />
+        <Field value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="sentences" autoFocus maxLength={48} returnKeyType="done" onSubmitEditing={done} />
         {username.length >= 3 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Feather name="at-sign" size={14} color={c.primaryInk} />

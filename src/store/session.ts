@@ -11,6 +11,7 @@ import { recoverIdentity, restoreLightningAddress } from "../services/identity";
 import { setRelays } from "../services/nostr";
 import * as wallet from "../services/wallet";
 import { deriveKeyRing, type KeyRing } from "../lib/keys";
+import { sentenceCaseName } from "../lib/displayName";
 import { useWallet } from "./wallet";
 
 export type Mode = "user" | "agent";
@@ -56,7 +57,7 @@ interface SessionState {
 
 export const useSession = create<SessionState>()(
   persist(
-    (set, get) => ({
+    (set, get): SessionState => ({
       phase: "loading",
       keys: null,
       mode: "user",
@@ -101,7 +102,7 @@ export const useSession = create<SessionState>()(
           keys,
           // A restored phrase is, by definition, already written down.
           backedUp: true,
-          profile: { name: found?.name ?? "", about: found?.about ?? "" },
+          profile: { name: sentenceCaseName(found?.name ?? ""), about: found?.about ?? "" },
           // Nothing found: ask for a name, as for a new wallet.
           needsName: !found?.name,
           recents: [],
@@ -121,7 +122,7 @@ export const useSession = create<SessionState>()(
         set({ relays: next });
       },
       setCurrency: (currency) => set({ currency }),
-      setProfile: (profile) => set({ profile }),
+      setProfile: (profile) => set({ profile: { ...profile, name: sentenceCaseName(profile.name) } }),
       toggleHideBalance: () => set({ hideBalance: !get().hideBalance }),
       togglePreferSats: () => set({ preferSats: !get().preferSats }),
       finishNaming: () => set({ needsName: false }),
@@ -145,7 +146,10 @@ export const useSession = create<SessionState>()(
         preferSats: s.preferSats,
         needsName: s.needsName,
       }),
-      onRehydrateStorage: () => () => useSession.setState({ hydrated: true }),
+      onRehydrateStorage: () => (state) => useSession.setState({
+        hydrated: true,
+        ...(state && { profile: { ...state.profile, name: sentenceCaseName(state.profile.name) } }),
+      }),
     },
   ),
 );

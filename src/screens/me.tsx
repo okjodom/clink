@@ -181,7 +181,7 @@ export function MeScreen() {
         </ScrollView>
       </Sheet>
       <Sheet visible={nameOpen} onClose={() => setNameOpen(false)} title="Your name">
-        <Field value={name} onChangeText={setName} placeholder="What people see" maxLength={48} autoFocus />
+        <Field value={name} onChangeText={setName} placeholder="What people see" maxLength={48} autoCapitalize="sentences" autoFocus />
         <Button
           title="Save"
           onPress={() => {
