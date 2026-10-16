@@ -41,7 +41,7 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 
 import { BREEZ_API_KEY, BREEZ_NETWORK } from "./config";
 import { deleteSecret, getSecret, setSecret } from "./secure";
-import { isValidMnemonic, newMnemonic, normaliseMnemonic } from "../lib/keys";
+import { newMnemonic, normaliseMnemonic } from "../lib/keys";
 import { BRAND } from "../brand";
 import { DOLLARS_LABEL, USDB_TOKEN, assetLabel, chainLabel, chainOrder, fromBaseUnits, quoteExpiry, tokenAmount, toBaseUnits } from "../lib/stablecoins";
 import { usernameFrom } from "../lib/username";
@@ -49,6 +49,7 @@ import { paymentDescription, receiveDescription, refreshAddressBrand } from "../
 import { deliveryStatus, lowestFeeOption, onchainFeeOptions, quotedFeeSats, sendAmount, type OnchainFeeOption, type OnchainSpeed } from "../lib/sendFlow";
 import { transactionExplorer } from "../lib/explorers";
 import { withIncomingDeposits } from "../lib/incomingDeposits";
+import { validRecoveryWords } from "../lib/recovery";
 
 export { usernameFrom };
 
@@ -81,7 +82,7 @@ export async function createMnemonic(): Promise<string> {
 
 export async function restoreMnemonic(input: string): Promise<string> {
   const m = normaliseMnemonic(input);
-  if (!isValidMnemonic(m)) throw new Error("That recovery phrase isn't valid. Check the words and their order.");
+  if (!validRecoveryWords(m.split(" "))) throw new Error("Enter your 12 recovery words in the right order.");
   await disconnect();
   await setSecret(MNEMONIC_KEY, m);
   return m;

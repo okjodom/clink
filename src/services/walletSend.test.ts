@@ -1,7 +1,6 @@
 jest.mock("expo-file-system", () => ({ Paths: { document: { uri: "file:///wallet" } } }));
 jest.mock("./config", () => ({ BREEZ_API_KEY: "test", BREEZ_NETWORK: "mainnet" }));
 jest.mock("./secure", () => ({ getSecret: jest.fn(async () => "test mnemonic"), setSecret: jest.fn(), deleteSecret: jest.fn() }));
-jest.mock("../lib/keys", () => ({ isValidMnemonic: () => true, normaliseMnemonic: (s: string) => s, newMnemonic: () => "test mnemonic" }));
 jest.mock("@breeztech/breez-sdk-spark-react-native", () => {
   const variant = (tag: string) => class {
     tag = tag;
@@ -18,6 +17,7 @@ jest.mock("@breeztech/breez-sdk-spark-react-native", () => {
 
 import { connect as breezConnect } from "@breeztech/breez-sdk-spark-react-native";
 import * as wallet from "./wallet";
+import { setSecret } from "./secure";
 
 const sdk = {
   parse: jest.fn(), prepareSendPayment: jest.fn(), prepareLnurlPay: jest.fn(), sendPayment: jest.fn(),
@@ -30,6 +30,15 @@ beforeEach(async () => {
   jest.clearAllMocks();
   jest.mocked(breezConnect).mockResolvedValue(sdk as never);
   sdk.prepareSendPayment.mockImplementation(async (request) => ({ amount: request.amount, paymentMethod: { inner: { fee: 2n } } }));
+});
+
+it("rejects recovery phrases other than 12 valid words before changing the wallet", async () => {
+  await wallet.connect();
+  for (const phrase of [[...Array(23).fill("abandon"), "art"].join(" "), Array(12).fill("abandon").join(" "), "not a valid recovery phrase"]) {
+    await expect(wallet.restoreMnemonic(phrase)).rejects.toThrow(/12 recovery words/);
+  }
+  expect(sdk.disconnect).not.toHaveBeenCalled();
+  expect(setSecret).not.toHaveBeenCalled();
 });
 
 it("accepts an amountless Lightning invoice and passes the user's amount to the SDK", async () => {

@@ -1,20 +1,22 @@
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
-import { Pressable, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { isMnemonicWord, isValidMnemonic, mnemonicWordSuggestions } from "../lib/keys";
+import { isMnemonicWord, mnemonicWordSuggestions } from "../lib/keys";
+import { editRecoveryWord, RECOVERY_WORD_COUNT, validRecoveryWords } from "../lib/recovery";
 import { BRAND } from "../brand";
 import { profileTemplate } from "../protocol/events";
 import { publish, sign } from "../services/nostr";
 import * as wallet from "../services/wallet";
 import { useSession } from "../store/session";
 import { useWallet } from "../store/wallet";
-import { Button, Chip, Field, Logo, Notice, Screen, Text, Wordmark, success } from "../ui/components";
+import { Button, Chip, Field, Logo, Screen, Text, Wordmark, success } from "../ui/components";
 import { toast, toastError } from "../ui/extras";
 import { space, useColors } from "../ui/theme";
+import { RecoveryWords } from "../ui/recoveryWords";
 
 export function WelcomeScreen() {
   const c = useColors();
@@ -136,61 +138,97 @@ export function PickNameScreen() {
 }
 
 export function RestoreScreen() {
+  const c = useColors();
   const restore = useSession((s) => s.restoreWallet);
-  const [text, setText] = useState("");
+  const [words, setWords] = useState<string[]>(Array(RECOVERY_WORD_COUNT).fill(""));
   const [busy, setBusy] = useState(false);
-  const words = text.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const last = text.endsWith(" ") ? "" : (words[words.length - 1] ?? "");
-  const suggestions = last && !isMnemonicWord(last) ? mnemonicWordSuggestions(last) : [];
-  const bad = words.filter((w, i) => !isMnemonicWord(w) && (i < words.length - 1 || text.endsWith(" ")));
-  const valid = (words.length === 12 || words.length === 24) && isValidMnemonic(text);
+  const [active, setActive] = useState<number | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const fields = useRef<Array<TextInput | null>>([]);
+  const scroll = useRef<ScrollView>(null);
+  const gridTop = useRef(0);
+  const restoring = useRef(false);
+  const entered = words.filter(Boolean).length;
+  const invalid = words.flatMap((word, i) => word && !isMnemonicWord(word) && active !== i ? [i] : []);
+  const suggestions = active === null ? [] : mnemonicWordSuggestions(words[active]);
+  const valid = validRecoveryWords(words);
+  const checksumProblem = entered === RECOVERY_WORD_COUNT && words.every(isMnemonicWord) && !valid;
+  const problem = editError ?? (invalid.length ? `Check word ${invalid[0] + 1}.` : checksumProblem ? "These words don't match. Check each word and its order." : null);
+
+  const focus = (index: number) => fields.current[index]?.focus();
+  const edit = (index: number, value: string) => {
+    const next = editRecoveryWord(words, index, value);
+    setWords(next.words);
+    setEditError(next.error);
+    if (next.next !== null) requestAnimationFrame(() => focus(next.next!));
+  };
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <Screen
       back
       title="Restore"
+      scroll={false}
+      padded={false}
       footer={
+        <View style={{ gap: space.sm }}>
+        {suggestions.length > 0 && <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+          {suggestions.map((word) => <Chip key={word} label={word} onPress={() => {
+            if (active === null || busy) return;
+            edit(active, word + " ");
+          }} />)}
+        </ScrollView>}
         <Button
           title="Restore wallet"
           disabled={!valid}
           loading={busy}
           onPress={async () => {
+            if (!valid || restoring.current) return;
+            restoring.current = true;
+            Keyboard.dismiss();
             setBusy(true);
             try {
-              await restore(text);
+              await restore(words.join(" "));
               const name = useSession.getState().profile.name;
               toast(name ? `Welcome back, ${name}` : "Wallet restored", "success");
             } catch (e) {
               toastError(e);
               setBusy(false);
+              restoring.current = false;
             }
           }}
         />
+        </View>
       }
     >
-      <Text variant="title">Enter your recovery words</Text>
-      <Text muted>Type them in order, with a space between each. Your money, name and username come back.</Text>
-      <Field
-        value={text}
-        onChangeText={setText}
-        multiline
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="off"
-        placeholder="word1 word2 word3 …"
-        error={bad.length ? `Not in the word list: ${bad.join(", ")}` : null}
-        hint={`${words.length} word${words.length === 1 ? "" : "s"}`}
-      />
-      {suggestions.length > 0 && (
-        <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
-          {suggestions.map((s) => (
-            <Chip key={s} label={s} onPress={() => setText([...words.slice(0, -1), s].join(" ") + " ")} />
-          ))}
-        </View>
-      )}
-      <Notice tone="warning" title={`Only type your words into ${BRAND.name}`}>
-        {`No one from ${BRAND.name}, and no agent, will ever ask for them.`}
-      </Notice>
+      <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.lg }}>
+        <Text variant="title">Your 12 recovery words</Text>
+        <Text muted>Enter them in the order you wrote them down.</Text>
+        <Text variant="caption" muted>{entered} of 12 words</Text>
+        <RecoveryWords words={words} active={active} invalid={invalid} onPressWord={focus}
+          onLayout={(event) => { gridTop.current = event.nativeEvent.layout.y; }}
+          renderWord={(word, i) => <TextInput
+            ref={(field) => { fields.current[i] = field; }}
+            value={word} editable={!busy} autoFocus={i === 0}
+            accessibilityLabel={`Recovery word ${i + 1}`}
+            onChangeText={(value) => edit(i, value)}
+            onFocus={() => {
+              setActive(i);
+              scroll.current?.scrollTo({ y: i < 3 ? 0 : Math.max(0, gridTop.current + Math.floor(i / 3) * (52 + space.sm) - space.sm), animated: true });
+            }}
+            onBlur={() => setActive((current) => current === i ? null : current)}
+            onSubmitEditing={() => i < RECOVERY_WORD_COUNT - 1 ? focus(i + 1) : Keyboard.dismiss()}
+            onKeyPress={({ nativeEvent }) => { if (nativeEvent.key === "Backspace" && !word && i > 0) focus(i - 1); }}
+            autoCapitalize="none" autoCorrect={false} spellCheck={false} autoComplete="off"
+            textContentType="none" importantForAutofill="no"
+            returnKeyType={i === RECOVERY_WORD_COUNT - 1 ? "done" : "next"}
+            blurOnSubmit={false}
+            style={{ flex: 1, minWidth: 0, paddingVertical: 12, paddingHorizontal: 0, fontSize: 14, fontWeight: "500", color: c.text }}
+          />} />
+        {problem && <Text variant="caption" color={c.danger} accessibilityLiveRegion="polite">{problem}</Text>}
+        <Text variant="caption" muted>Never share these words. They unlock your wallet.</Text>
+      </ScrollView>
     </Screen>
+    </KeyboardAvoidingView>
   );
 }

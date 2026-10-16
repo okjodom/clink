@@ -8,7 +8,8 @@ import { storedMnemonic } from "../services/wallet";
 import { useSession } from "../store/session";
 import { Button, Card, Chip, Notice, Screen, Text, success } from "../ui/components";
 import { toast, toastError } from "../ui/extras";
-import { radius, space, useColors } from "../ui/theme";
+import { space, useColors } from "../ui/theme";
+import { RecoveryWords } from "../ui/recoveryWords";
 
 async function authenticate(): Promise<boolean> {
   const has = await LocalAuthentication.hasHardwareAsync().catch(() => false);
@@ -92,16 +93,7 @@ export function BackupScreen() {
         title="Your 12 words"
         footer={<Button title={backedUp ? "Done" : "I wrote them down"} onPress={() => (backedUp ? nav.goBack() : setStage("verify"))} />}
       >
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-          {words.map((w, i) => (
-            <View key={i} style={{ width: "31.5%", flexDirection: "row", gap: 6, alignItems: "center", backgroundColor: c.surface, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: 10 }}>
-              <Text variant="caption" faint style={{ width: 18 }}>
-                {i + 1}
-              </Text>
-              <Text variant="label">{w}</Text>
-            </View>
-          ))}
-        </View>
+        <RecoveryWords words={words} />
         <Notice tone="warning">Don't take a screenshot. Screenshots often get copied to the cloud.</Notice>
       </Screen>
     );
